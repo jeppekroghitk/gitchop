@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>gitchop — settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="masthead">
+        <h1 class="wordmark">git<b>chop</b></h1>
+        <p class="tagline">
+          Press <kbd>.</kbd> anywhere on <span class="mono">github.com</span> to chop the page open.
+          These are the links it reveals.
+        </p>
+      </header>
+
+      <section class="card card-warn" id="access-card" hidden>
+        <div class="card-head">
+          <h2>Access to GitHub</h2>
+        </div>
+        <div id="access"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Your links</h2>
+          <span class="status" id="status" role="status" aria-live="polite"></span>
+        </div>
+
+        <div class="rows" id="rows"></div>
+
+        <div class="card-foot">
+          <button type="button" class="btn btn-primary" id="add">+ Add link</button>
+          <button type="button" class="btn" id="reset">Restore defaults</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>GitHub token</h2>
+          <span class="status" id="sync-status" role="status" aria-live="polite"></span>
+        </div>
+        <div id="sync"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Private repository search</h2>
+          <span class="status" id="index-status" role="status" aria-live="polite"></span>
+        </div>
+        <div id="index"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Placeholders</h2>
+        </div>
+        <p class="note">
+          Any of these in a URL is replaced with something from the page you are on. A link whose
+          placeholders cannot be filled is shown greyed out in the menu.
+        </p>
+        <dl class="tokens" id="tokens"></dl>
+      </section>
+
+      <footer class="footer">
+        <span id="version" class="mono"></span>
+      </footer>
+    </main>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

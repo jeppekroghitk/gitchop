@@ -1,0 +1,5 @@
+.DS_Store
+.claude/
+
+# Built by dev/package.sh; belongs on a release, not in the tree.
+gitchop.xpi

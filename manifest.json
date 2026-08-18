@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "gitchop",
+  "version": "2.0.0",
+  "description": "Press . anywhere on GitHub for your own links and instant repository search, with your organisations first.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://github.com/*", "https://api.github.com/*"],
+  "background": {
+    "service_worker": "src/background.js",
+    "scripts": ["src/background.js"],
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://github.com/*"],
+      "js": [
+        "src/content/context.js",
+        "src/content/styles.js",
+        "src/content/chop.js",
+        "src/content/menu.js",
+        "src/content/main.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "options_ui": {
+    "page": "src/options/options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_title": "gitchop — settings"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "gitchop@itk-dev",
+      "strict_min_version": "115.0",
+      "data_collection_permissions": {
+        "required": ["searchTerms"],
+        "optional": ["authenticationInfo", "bookmarksInfo"]
+      }
+    }
+  }
+}
