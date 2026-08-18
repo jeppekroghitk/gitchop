@@ -66,8 +66,13 @@ No build step — the files in `src/` are what runs.
 
 ```sh
 node dev/context.test.mjs && node dev/repos.test.mjs   # tests
-./dev/package.sh                                       # build gitchop.xpi
+./dev/package.sh                                       # build gitchop.xpi, needs only zip
 open dev/harness.html                                  # the menu, without installing
 ```
+
+To run your changes, load the folder itself: `about:debugging#/runtime/this-firefox` → **Load
+Temporary Add-on** → pick `manifest.json`. It reloads with one button and is dropped when the browser
+closes. Building is only for producing a file to hand to someone else, and the result is unsigned, so
+it installs permanently only in a browser that allows unsigned add-ons.
 
 [Changelog](CHANGELOG.md) · MIT
