@@ -125,6 +125,8 @@
         number, title, url: `https://github.com/${repo}/pull/${number}`, repo, repoShort: repo.split('/')[1],
         private: false, draft: false, author: '', verdict: null, age: '', ...over,
       });
+      // Enough of them that the column overflows and has to scroll — that is the case worth
+      // exercising here, since a column that fits never shows what the wheel does.
       const PULLS = {
         needsReview: [
           pull('os2display/display-api-service', 412, 'Fix feed source caching', { private: true, author: 'jekuno', age: '2h' }),
@@ -132,13 +134,22 @@
           pull('Leantime/leantime', 2201, 'Docker healthcheck', { author: 'marcel', age: '3d' }),
           pull('os2display/display-client', 640, 'Slide transitions respect reduced motion', { author: 'jekuno', age: '4d' }),
           pull('itk-dev/economics', 79, 'Import from the bank export', { private: true, author: 'tuj', age: '1w' }),
+          pull('itk-dev/hoeringsportal', 302, 'Consent banner copy', { private: true, author: 'rimi', age: '1w' }),
+          pull('os2display/display-templates', 155, 'Poster template: fall back to the venue image when the event has none', { author: 'sine', age: '2w' }),
+          pull('itk-dev/economics', 71, 'Archive closed periods', { private: true, author: 'tuj', age: '3w' }),
         ],
         reviewed: [
           pull('itk-dev/gitchop', 17, 'Pull requests beside the menu', { verdict: 'approved', age: '40m' }),
           pull('itk-dev/economics', 84, 'Invoice numbering', { private: true, verdict: 'changes', age: '5h' }),
+          pull('os2display/display-client', 633, 'Preload the next slide', { verdict: 'approved', age: '1d' }),
+          pull('itk-dev/hoeringsportal', 298, 'Hearing deadline in the reply form', { private: true, verdict: 'changes', age: '2d' }),
+          pull('itk-dev/gitchop', 14, 'Firefox 140 is the minimum', { verdict: 'approved', age: '6d' }),
         ],
         unreviewed: [
           pull('itk-dev/economics', 91, 'Rounding in VAT lines', { private: true, age: '5h' }),
+          pull('itk-dev/gitchop', 19, 'Let the lists scroll under the wheel', { age: '1h' }),
+          pull('os2display/display-api-service', 419, 'Feed source: honour the cache headers the upstream actually sends', { private: true, age: '3d' }),
+          pull('itk-dev/hoeringsportal', 305, 'Draft: attachments on replies', { private: true, draft: true, age: '4d' }),
         ],
       };
       function pullsAnswer(message) {

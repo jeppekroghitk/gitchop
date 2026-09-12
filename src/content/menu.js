@@ -440,11 +440,12 @@ window.__gitchop = window.__gitchop || {};
     /**
      * What one pull request says about itself: the title — that is what you recognise your work
      * by — the repository, dim, with the owner dropped because you know which economics is yours,
-     * and how long since it last moved. On the feedback lane the glyph is the verdict. Nothing
-     * else: the column is for looking at.
+     * and how long since it last moved. On the feedback lane the glyph is the verdict; elsewhere it
+     * is the same mark on every row, meaning nothing — private or public is not a question here,
+     * every one of these is yours to deal with. The column is for looking at.
      */
     function pullEntry(pull, lane) {
-      let icon = pull.private ? '◆' : '◇';
+      let icon = '◆';
       if (lane.id === 'reviewed') icon = pull.verdict === 'changes' ? '✗' : '✓';
       return {
         usable: gc.isSafeUrl(pull.url),

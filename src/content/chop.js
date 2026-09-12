@@ -115,9 +115,20 @@ window.__gitchop = window.__gitchop || {};
     shadow.append(style, scrim, wipe, ...edges, bloom, cut, flare, sparks, menuLayer);
     document.documentElement.append(host);
 
-    const blockScroll = (event) => event.preventDefault();
-    host.addEventListener('wheel', blockScroll, { passive: false });
-    host.addEventListener('touchmove', blockScroll, { passive: false });
+    /**
+     * Wheel and touch scrolling must not reach the page behind the overlay — except inside a list
+     * that has something to scroll, which scrolls itself; overscroll-behavior: contain on the lists
+     * keeps one that has hit its edge from handing the rest of the gesture to the page. The listener
+     * sits on the shadow root rather than the host: a closed shadow root retargets events for
+     * listeners outside it, so from the host every wheel looks like it landed on the host itself.
+     */
+    const blockScroll = (event) => {
+      const list = event.target?.closest?.('.gc-list');
+      if (list && list.scrollHeight > list.clientHeight) return;
+      event.preventDefault();
+    };
+    shadow.addEventListener('wheel', blockScroll, { passive: false });
+    shadow.addEventListener('touchmove', blockScroll, { passive: false });
 
     /**
      * Keyboard events are composed, so they escape the shadow root and reach GitHub's own
@@ -335,8 +346,8 @@ window.__gitchop = window.__gitchop || {};
       },
 
       destroy() {
-        host.removeEventListener('wheel', blockScroll);
-        host.removeEventListener('touchmove', blockScroll);
+        shadow.removeEventListener('wheel', blockScroll);
+        shadow.removeEventListener('touchmove', blockScroll);
         for (const type of ['keydown', 'keypress', 'keyup']) {
           host.removeEventListener(type, keepKeys);
         }
