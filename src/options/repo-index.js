@@ -1,7 +1,10 @@
 import { api } from '../lib/links.js';
+import { tokenGate } from './pages.js';
 
 const host = document.getElementById('index');
 const statusEl = document.getElementById('index-status');
+/** Under the card: what is worth knowing about the index as it stands. */
+const notes = document.getElementById('index-notes');
 
 let statusTimer = null;
 let busy = false;
@@ -57,20 +60,21 @@ async function guard(node, work) {
   }
 }
 
+/** Whether a token is saved: the index is built from one, so without it there is nothing to build. */
+let tokened = false;
+
 function render(index, error) {
   host.textContent = '';
-  const wrap = element('div', 'card-body');
+  notes.textContent = '';
 
-  wrap.append(
-    element(
-      'p',
-      'note',
-      'GitHub’s search will not show you private repositories, so gitchop keeps its own list of the ' +
-        'repositories your token can reach and matches that first. It is held on this machine only, it ' +
-        'answers instantly with no request per keystroke, and it covers private repositories that search ' +
-        'cannot see.',
-    ),
-  );
+  if (!tokened) {
+    host.append(tokenGate());
+    notes.append(element('p', 'note', 'The index is the repositories a token can reach; without one there is nothing to build.'));
+    return;
+  }
+
+  const wrap = element('div', 'card-body');
+  if (!(index && index.count > 0)) wrap.append(element('p', 'empty', 'No index built yet.'));
 
   if (index && index.count > 0) {
     const facts = element('dl', 'facts');
@@ -85,15 +89,13 @@ function render(index, error) {
     }
     wrap.append(facts);
 
-    wrap.append(
+    notes.append(
       element(
         'p',
         'note',
-        'Check the private count as much as the list. Every token can list public repositories, whoever ' +
-          'it was made for, so an organisation that never granted the token, or has not approved it yet, ' +
-          'still shows up here with its public repositories — only its private ones are missing. The ' +
-          'request succeeds either way and simply returns less, which is the one failure GitHub will ' +
-          'not tell you about.',
+        'Check the private count as much as the list: any token lists an organisation’s public ' +
+          'repositories, so one that never granted the token, or has not approved it yet, still shows ' +
+          'up here with only its private ones missing. GitHub returns less rather than an error.',
       ),
     );
 
@@ -102,10 +104,9 @@ function render(index, error) {
         element(
           'p',
           'error',
-          'No private repositories came back. The token lists public repositories, which any token can, ' +
-            'but no private ones: a fine-grained token needs Metadata read-only, the organisation it was ' +
-            'created for has to be its resource owner, and where that organisation requires approval, an ' +
-            'owner has to approve it first — until then it is a public-only token, however it was made.',
+          'No private repositories came back. A fine-grained token needs Metadata: read-only with the ' +
+            'organisation as its resource owner, and an owner’s approval where the organisation requires ' +
+            'one; until then it lists public repositories only.',
         ),
       );
     }
@@ -142,7 +143,9 @@ function render(index, error) {
 
 export async function load() {
   try {
-    render(await ask({ type: 'gitchop:index:state' }));
+    const [index, sync] = await Promise.all([ask({ type: 'gitchop:index:state' }), ask({ type: 'gitchop:sync:state' })]);
+    tokened = Boolean(sync.hasToken);
+    render(index);
   } catch (error) {
     render(null, String(error.message ?? error));
   }

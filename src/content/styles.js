@@ -206,6 +206,42 @@ window.__gitchop.CSS = `
   }
 }
 
+/*
+ * The panel switched off in Settings: the columns stand on their own, at their own widths, and no
+ * rule about room beside the panel applies — there is no panel to be beside. The stage holds the
+ * keys then, so it may be focused, quietly.
+ */
+.gc-stage[data-panel="false"] {
+  width: min(440px, 100%);
+}
+
+.gc-stage[data-panel="false"][data-news="true"] {
+  width: min(400px, 100%);
+}
+
+.gc-stage[data-panel="false"][data-pulls="true"] {
+  width: min(440px, 100%);
+}
+
+.gc-stage[data-panel="false"][data-news="true"][data-pulls="true"] {
+  width: min(856px, 100%);
+}
+
+.gc-stage[data-panel="false"] .gc-pulls,
+.gc-stage[data-panel="false"][data-news="true"] .gc-news,
+.gc-stage[data-panel="false"][data-news="true"][data-pulls="true"] .gc-news {
+  display: flex;
+}
+
+.gc-stage:focus {
+  outline: none;
+}
+
+/* In a column's head the count sits by the title; the news keeps its own right-hand fact. */
+.gc-news .gc-count {
+  margin-left: 0;
+}
+
 .gc-panel::before,
 .gc-pulls::before,
 .gc-news::before {

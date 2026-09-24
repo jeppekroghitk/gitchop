@@ -96,6 +96,8 @@
         // rises the instant the blade lands, or ?enabled=0 for the instant open. Every slider
         // needs its key here, or the URL has nothing to override.
         effects: { enabled: 1, colour: 0, epicness: 60, speed: 100, menuDelay: 140 },
+        // ?panel=off leaves the menu without the links and the search: only the columns rise.
+        panel: { enabled: params.get('panel') === 'off' ? 0 : 1 },
         links: [
           { id: '1', icon: '🔔', label: 'Notifications', url: 'https://github.com/notifications' },
           { id: '2', icon: '🧩', label: 'Your pull requests', url: 'https://github.com/pulls' },
@@ -459,6 +461,11 @@
             if (message.type === 'gitchop:options') {
               openSettings();
               return { ok: true };
+            }
+            if (message.type === 'gitchop:panel') return { ok: true, settings: { ...store.panel }, show: store.panel.enabled === 1 };
+            if (message.type === 'gitchop:panel:settings') {
+              Object.assign(store.panel, message.patch);
+              return { ok: true, settings: { ...store.panel }, show: store.panel.enabled === 1 };
             }
             if (message.type === 'gitchop:pulls') return pullsAnswer(message);
             if (message.type === 'gitchop:pulls:refresh') {

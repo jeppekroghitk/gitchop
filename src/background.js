@@ -1,4 +1,4 @@
-import { DEFAULT_LINKS, api, isSafeUrl, loadLinks, sanitize, saveLinks, withIds } from './lib/links.js';
+import { DEFAULT_LINKS, PANEL_KEY, api, isSafeUrl, loadLinks, sanitize, sanitizePanel, saveLinks, withIds } from './lib/links.js';
 import { createStore, identify, readStore, scopesGrantWrite, tokenKind, tokenLabel, writeStore } from './lib/gist.js';
 import { findRepos, listAccessibleRepos, matchIndex, ownersFromLinks, ownersReachable, privateOwnersOf } from './lib/repos.js';
 import { newVaultKey, seal, unseal } from './lib/vault.js';
@@ -804,6 +804,24 @@ async function contributionsState() {
   };
 }
 
+/**
+ * Whether the panel itself — the links and the search — rises with the menu. Off, the columns stand
+ * on their own; the menu decides for itself that with no column to stand, the panel stays.
+ */
+async function readPanel() {
+  try {
+    const stored = await api.storage.sync.get(PANEL_KEY);
+    return sanitizePanel(stored[PANEL_KEY]);
+  } catch {
+    return sanitizePanel();
+  }
+}
+
+async function panelState() {
+  const settings = await readPanel();
+  return { settings, show: settings.enabled === 1 };
+}
+
 const HANDLERS = {
   'gitchop:options': async () => {
     await api.runtime.openOptionsPage();
@@ -861,6 +879,13 @@ const HANDLERS = {
     const settings = contribSettings({ ...(await readContribSettings()), ...(message.patch ?? {}) });
     await api.storage.sync.set({ [CONTRIB_SETTINGS_KEY]: settings });
     return contributionsState();
+  },
+  /** Instant: whether the panel rises with the menu. */
+  'gitchop:panel': () => panelState(),
+  'gitchop:panel:settings': async (message) => {
+    const settings = sanitizePanel({ ...(await readPanel()), ...(message.patch ?? {}) });
+    await api.storage.sync.set({ [PANEL_KEY]: settings });
+    return panelState();
   },
   'gitchop:index:build': () => buildIndex(),
   'gitchop:index:clear': async () => {

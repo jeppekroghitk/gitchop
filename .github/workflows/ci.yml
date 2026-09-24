@@ -24,6 +24,7 @@ jobs:
           node dev/news.test.mjs
           node dev/contributions.test.mjs
           node dev/odometer.test.mjs
+          node dev/links.test.mjs
 
       # There is no bundler between src/ and the browser, so this is where a mistyped path or a
       # broken import is caught — the build refuses to package a manifest it cannot resolve.

@@ -274,15 +274,6 @@ function preview() {
 }
 
 function render() {
-  const note = document.createElement('p');
-  note.className = 'note';
-  note.textContent =
-    'How the page is chopped open when you press the dot. The switch turns the animation off ' +
-    'altogether — the menu then just opens. A swatch paints the blade, epicness turns one clean ' +
-    'cut into a full action scene, and speed slows the whole thing down or hurries it. ' +
-    'Menu delay is how long the menu waits in the opening cut before it rises. ' +
-    'Changes save on their own, and Preview plays the result right here.';
-
   const sliders = document.createElement('div');
   sliders.className = 'sliders';
   slidersEl = sliders;
@@ -308,7 +299,7 @@ function render() {
   foot.className = 'card-foot';
   foot.append(previewBtn, reset);
 
-  host.append(note, sliders, foot);
+  host.append(sliders, foot);
   reflect();
 }
 

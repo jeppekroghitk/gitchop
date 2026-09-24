@@ -9,11 +9,12 @@ import {
   saveLinks,
   withIds,
 } from '../lib/links.js';
+import { mount as mountPages } from './pages.js';
 import { load as loadSync, watch as watchSync } from './sync.js';
 import { load as loadIndex } from './repo-index.js';
 import { load as loadPulls } from './pulls-card.js';
+import { load as loadFeatures } from './features-card.js';
 import { load as loadNews, watch as watchNews } from './news-card.js';
-import { load as loadContributions } from './contributions-card.js';
 import { load as loadAccess, watch as watchAccess } from './access.js';
 import { load as loadEffects } from './effects-card.js';
 
@@ -189,6 +190,9 @@ window.addEventListener('beforeunload', () => {
 const { name, version } = api.runtime.getManifest();
 document.getElementById('version').textContent = `${name} ${version}`;
 
+// The page to show is decided before anything is fetched, so the first paint is the right card.
+mountPages();
+
 links = await loadLinks();
 lastWritten = JSON.stringify(links);
 render();
@@ -196,15 +200,15 @@ renderTokens();
 await loadEffects();
 watchAccess();
 await loadAccess();
-// A token appearing or disappearing changes what the index, pull request and contributions cards can offer.
+// A token appearing or disappearing changes what the index, pull request and features cards can offer.
 watchSync(() => {
   loadIndex();
   loadPulls();
-  loadContributions();
+  loadFeatures();
 });
 await loadSync();
 await loadIndex();
 await loadPulls();
-await loadContributions();
+await loadFeatures();
 watchNews();
 await loadNews();

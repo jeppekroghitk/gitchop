@@ -31,9 +31,8 @@ function render(ok, note) {
     element(
       'p',
       'note',
-      'This browser treats access to a site as something you grant rather than something an ' +
-        'extension takes, and it has not been granted yet. Until it is, gitchop cannot run on ' +
-        'GitHub at all — pressing the . key will do nothing, with no error to explain why.',
+      'This browser has not granted gitchop access to github.com yet. Until it does, pressing . there ' +
+        'does nothing.',
     ),
   );
 
@@ -61,8 +60,7 @@ function render(ok, note) {
     element(
       'p',
       'note',
-      'Already open GitHub tabs need a reload afterwards — content scripts are injected when a page ' +
-        'loads, so tabs opened before the grant are not covered.',
+      'GitHub tabs already open need a reload afterwards.',
     ),
   );
 

@@ -1,5 +1,6 @@
 import { tokenLabel } from '../lib/gist.js';
 import { api } from '../lib/links.js';
+import { tokenGate, tokenState } from './pages.js';
 
 const TOKEN_CLASSIC = 'https://github.com/settings/tokens/new?scopes=repo,gist&description=gitchop';
 const TOKEN_FINE = 'https://github.com/settings/personal-access-tokens/new';
@@ -29,6 +30,9 @@ function fineTokenUrl(owner) {
 
 const tokenHost = document.getElementById('sync');
 const backupHost = document.getElementById('backup');
+/** Under each card: the cautions, the fine print, and what the backup would take. */
+const tokenNotes = document.getElementById('token-notes');
+const backupNotes = document.getElementById('backup-notes');
 
 let busy = false;
 let current = null;
@@ -257,16 +261,6 @@ function fineprint() {
   return box;
 }
 
-function intro() {
-  return element(
-    'p',
-    'note',
-    'A token lets gitchop find your private repositories, show the pull requests waiting on you, ' +
-      'follow news from the private repositories you subscribe to, and back your links up to a ' +
-      'secret gist. Public repositories need none.',
-  );
-}
-
 /**
  * The same recipe whether or not a token is saved yet, and always at the top of the card: a second
  * organisation is the same three steps again, and what gets pasted lands in the list right beneath.
@@ -282,9 +276,9 @@ function recipe() {
 
 function noToken(error) {
   const wrap = element('div', 'card-body');
-  wrap.append(intro(), recipe(), classicCaution());
+  wrap.append(recipe());
   if (error) wrap.append(element('p', 'error', error));
-  wrap.append(fineprint());
+  tokenNotes.append(classicCaution(), fineprint());
   return wrap;
 }
 
@@ -349,16 +343,16 @@ function broadWarning(sync) {
   return box;
 }
 
-/** The recipe first, then what it has produced so far, then the warning about any classic row in it. */
+/** The recipe first, then what it has produced so far; the warning about any classic row goes under the box. */
 function tokenCard(sync, error) {
   const wrap = element('div', 'card-body');
   const saved = element('div', 'recipe');
   saved.append(recipeHead('Saved tokens'), tokenList(sync));
-  wrap.append(intro(), recipe(), saved);
-  const warn = broadWarning(sync);
-  if (warn) wrap.append(warn);
+  wrap.append(recipe(), saved);
   if (error) wrap.append(element('p', 'error', error));
-  wrap.append(fineprint());
+  const warn = broadWarning(sync);
+  if (warn) tokenNotes.append(warn);
+  tokenNotes.append(fineprint());
   return wrap;
 }
 
@@ -372,35 +366,22 @@ function facts(rows) {
   return list;
 }
 
-function backupIntro() {
-  return element(
-    'p',
-    'note',
-    'Your links live in this browser’s profile and go with the extension if it is removed. Backup ' +
-      'writes them to a secret gist on every change, and the gist’s revision history is the safety net.',
-  );
-}
-
 /** Without a token there is nothing to write the gist with, so the card only says what it would take. */
 function backupNeedsToken() {
-  const wrap = element('div', 'card-body');
-  wrap.append(
-    backupIntro(),
+  backupNotes.append(
     element(
       'p',
       'note',
-      'It needs a token first: add one above. A fine-grained token for your own account, made with the ' +
-        'owner left blank, can write the gist; so can a classic token with gist. gitchop uses whichever ' +
-        'saved token can.',
+      'Needs a token under Tokens: a fine-grained one for your own account, made with the owner left ' +
+        'blank, or a classic one with gist. gitchop uses whichever saved token can write the gist.',
     ),
   );
-  return wrap;
+  return tokenGate();
 }
 
 function backupOff(sync, error) {
   const wrap = element('div', 'card-body');
-  wrap.append(
-    backupIntro(),
+  backupNotes.append(
     element(
       'p',
       'note',
@@ -494,11 +475,14 @@ function backupOn(sync, error) {
 function render(sync, error, card = 'token') {
   const tokenError = card === 'token' ? error : null;
   const backupError = card === 'backup' ? error : null;
+  tokenState(Boolean(sync?.hasToken));
 
   tokenHost.textContent = '';
+  tokenNotes.textContent = '';
   tokenHost.append(sync?.hasToken ? tokenCard(sync, tokenError) : noToken(tokenError));
 
   backupHost.textContent = '';
+  backupNotes.textContent = '';
   if (sync?.connected) backupHost.append(backupOn(sync, backupError));
   else if (sync?.hasToken) backupHost.append(backupOff(sync, backupError));
   else backupHost.append(backupNeedsToken());

@@ -1,8 +1,10 @@
 import { api } from '../lib/links.js';
-import { HOUR, SWITCHES, isRepoName, proseText } from '../lib/news.js';
+import { HOUR, isRepoName, proseText } from '../lib/news.js';
 
 const host = document.getElementById('news');
 const statusEl = document.getElementById('news-status');
+/** Under the card: what is worth knowing about the settings as they stand. */
+const notes = document.getElementById('news-notes');
 
 let statusTimer = null;
 let busy = false;
@@ -74,29 +76,6 @@ async function apply(message, word) {
   render(result);
 }
 
-/** One switch per setting, in the same dress as the chop effect's own. */
-function switchRow(spec, state) {
-  const row = element('div', 'slider slider-toggle');
-  row.title = spec.hint;
-
-  const label = element('span', 'slider-label', spec.label);
-  label.id = `news-${spec.id}-label`;
-
-  const toggle = element('button', 'switch');
-  toggle.type = 'button';
-  toggle.setAttribute('role', 'switch');
-  toggle.setAttribute('aria-labelledby', label.id);
-  const on = state.settings[spec.id] === 1;
-  toggle.dataset.on = String(on);
-  toggle.setAttribute('aria-checked', String(on));
-  toggle.addEventListener('click', () =>
-    guard(toggle, () => apply({ type: 'gitchop:news:settings', patch: { [spec.id]: on ? 0 : 1 } }, on ? 'off' : 'on')),
-  );
-
-  row.append(label, toggle, element('output', null, on ? 'on' : 'off'));
-  return row;
-}
-
 function clock(hour) {
   return `${String(hour).padStart(2, '0')}:00`;
 }
@@ -125,7 +104,7 @@ function hourRow(state) {
     output.textContent = clock(Number(input.value));
   });
   input.addEventListener('change', () =>
-    guard(input, () => apply({ type: 'gitchop:news:settings', patch: { hour: Number(input.value) } }, `at ${clock(Number(input.value))}`)),
+    guard(input, () => apply({ type: 'gitchop:news:settings', patch: { hour: Number(input.value) } }, 'saved')),
   );
 
   row.append(label, input, output);
@@ -203,20 +182,8 @@ function addRepo() {
 
 function render(state, error) {
   host.textContent = '';
+  notes.textContent = '';
   const wrap = element('div', 'card-body');
-
-  wrap.append(
-    element(
-      'p',
-      'note',
-      'A column on the far side of the menu with what happened in the repositories you follow, told ' +
-        'in a few sentences each — a release, the commits and who made them, the pull requests merged ' +
-        'and opened, the issues. Every fact is a chip: hover it and what it is made of unfolds ' +
-        'beneath, every line a link. It is a morning paper rather than a feed — made up once a day at ' +
-        'the hour below, covering everything since the previous edition, and left alone until the ' +
-        'next. It is read with the mouse; the keys stay with the links and the pull requests.',
-    ),
-  );
 
   if (!state) {
     if (error) wrap.append(element('p', 'error', error));
@@ -224,11 +191,12 @@ function render(state, error) {
     return;
   }
 
+  // The column's own switch is under Panels with the other columns'; the hour is here.
   const controls = element('div', 'sliders');
   controls.dataset.off = String(state.settings.enabled !== 1);
-  for (const spec of SWITCHES) controls.append(switchRow(spec, state));
   controls.append(hourRow(state));
   wrap.append(controls);
+  if (state.settings.enabled !== 1) notes.append(element('p', 'note', 'The column is switched off under Panels.'));
 
   if (state.repos.length > 0) {
     wrap.append(repoList(state));
@@ -237,12 +205,12 @@ function render(state, error) {
     facts.append(element('dt', null, 'Fetched'), element('dd', null, when(state.fetchedAt)));
     wrap.append(facts);
   } else {
-    wrap.append(
+    notes.append(
       element(
         'p',
         'note',
-        'Nothing subscribed yet. In the menu, → on any repository row and choose Subscribe to news; on a ' +
-          'repository page the same command sits in the list under Do. Or name one here.',
+        'Nothing subscribed yet. In the menu, → on a repository row and choose Subscribe to news, or ' +
+          'name one above.',
       ),
     );
   }
@@ -251,13 +219,12 @@ function render(state, error) {
 
   if (error) wrap.append(element('p', 'error', error));
 
-  wrap.append(
+  notes.append(
     element(
       'p',
       'note',
-      'Public repositories need no token. A private one is fetched with whichever saved token can see ' +
-        'it — repo on a classic token, Contents, Pull requests and Issues read-only on a fine-grained ' +
-        'one — and says so here when none can.',
+      'Public repositories need no token. A private one needs a saved token that can see it: repo on ' +
+        'a classic token, or Contents, Pull requests and Issues read-only on a fine-grained one.',
     ),
   );
 
