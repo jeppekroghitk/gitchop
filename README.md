@@ -158,10 +158,13 @@ A switch under Panels in Settings turns it off.
 
 ## Backup
 
-Links live in the browser profile, and go with the extension if you remove it. Connect a secret gist
-under **Backup** in Settings and every change is written there as a new revision. The gist is written
-with whichever saved token can reach it: a fine-grained token for your own account, which the token
-link asks Gists for when the owner is left blank, or a classic token with `gist`.
+Links and settings live in the browser profile, and go with the extension if you remove it. Connect a
+secret gist under **Backup** in Settings and every change is written there as a new revision: the
+links, the repositories you subscribe to for news and the edition hour, the switches under Panels and
+Pull requests, and the chop. Tokens never go in it. A pull replaces what is here with what the gist
+holds; a gist made by an earlier version holds only links, and is written back whole once read. The
+gist is written with whichever saved token can reach it: a fine-grained token for your own account,
+which the token link asks Gists for when the owner is left blank, or a classic token with `gist`.
 
 [PRIVACY.md](PRIVACY.md) covers what is stored and what is sent to GitHub.
 
@@ -171,7 +174,7 @@ No build step for the code — the files in `src/` are what runs. Packaging only
 `manifest.json` each browser gets, since the two disagree about the background script.
 
 ```sh
-node dev/context.test.mjs && node dev/repos.test.mjs && node dev/effects.test.mjs && node dev/pulls.test.mjs && node dev/news.test.mjs && node dev/contributions.test.mjs && node dev/odometer.test.mjs && node dev/links.test.mjs
+node dev/context.test.mjs && node dev/repos.test.mjs && node dev/effects.test.mjs && node dev/pulls.test.mjs && node dev/news.test.mjs && node dev/contributions.test.mjs && node dev/odometer.test.mjs && node dev/links.test.mjs && node dev/gist.test.mjs
 node dev/build.mjs all                                 # dist/gitchop-<version>-<browser>.<ext>
 node dev/build.mjs chrome --no-zip                     # unpacked, for chrome://extensions
 open dev/harness.html                                  # the menu, without installing

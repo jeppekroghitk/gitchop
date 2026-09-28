@@ -1,4 +1,15 @@
-import { DEFAULT_LINKS, PANEL_KEY, api, isSafeUrl, loadLinks, sanitize, sanitizePanel, saveLinks, withIds } from './lib/links.js';
+import {
+  DEFAULT_LINKS,
+  PANEL_KEY,
+  STORAGE_KEY as LINKS_KEY,
+  api,
+  isSafeUrl,
+  loadLinks,
+  sanitize,
+  sanitizePanel,
+  saveLinks,
+  withIds,
+} from './lib/links.js';
 import { createStore, identify, readStore, scopesGrantWrite, tokenKind, tokenLabel, writeStore } from './lib/gist.js';
 import { findRepos, listAccessibleRepos, matchIndex, ownersFromLinks, ownersReachable, privateOwnersOf } from './lib/repos.js';
 import { newVaultKey, seal, unseal } from './lib/vault.js';
@@ -46,12 +57,16 @@ const PULLS_FRESH = 60 * 1000;
 const PULLS_EVERY_MINUTES = 5;
 const PUSH_DELAY = 1500;
 const MAX_LINKS = 200;
+/** Where the chop keeps its sliders. effects.js owns the key, and is a classic script this module cannot import. */
+const EFFECTS_KEY = 'effects';
 
 /**
  * The gist is the durable copy; storage.sync is the working copy the menu reads, so the menu opens
- * instantly and offline. Tokens live in storage.local — never in storage.sync, which would ship them
- * to Mozilla's servers — and every request to GitHub happens here in the background, so no page
- * context ever sees one.
+ * instantly and offline. Everything in storage.sync is in the gist — the links, and every setting
+ * beside them: the panel switches, the pull request switches, the news subscriptions and edition
+ * hour, the chop — so a fresh profile is the old one after a pull. Tokens live in storage.local —
+ * never in storage.sync, which would ship them to Mozilla's servers, and never in the gist — and
+ * every request to GitHub happens here in the background, so no page context ever sees one.
  *
  * Tokens are a list because a fine-grained token has exactly one resource owner. Two organisations
  * and a personal account means three tokens. The single-token alternative is a classic token with
@@ -184,36 +199,88 @@ async function withGistToken(run) {
 }
 
 /**
- * Writes the remote list locally without the change bouncing straight back as a push.
- *
- * The gist is the one input gitchop does not author. A secret gist is unlisted rather than private,
- * and an id can be adopted from anywhere, so what comes back is treated as untrusted: anything that
- * is not an http(s) URL is dropped rather than stored, and the list is capped.
+ * The chop's settings belong to effects.js, which clamps every number to its slider whenever it
+ * reads them and cannot be imported here. So the gist's copy is only held to a shape: a plain
+ * object of a few numbers, nothing that could be anything else.
  */
-async function applyRemote(links) {
-  const clean = links
+function sanitizeEffects(raw) {
+  const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const effects = {};
+  for (const [key, value] of Object.entries(source).slice(0, 16)) {
+    const number = Number(value);
+    if (Number.isFinite(number)) effects[key.slice(0, 32)] = number;
+  }
+  return effects;
+}
+
+function sanitizeLinks(raw) {
+  return (Array.isArray(raw) ? raw : [])
     .filter((link) => link && typeof link === 'object')
     .map(sanitize)
     .filter((link) => isSafeUrl(link.url))
     .slice(0, MAX_LINKS);
-  inStep = JSON.stringify(clean);
-  await api.storage.sync.set({ links: clean });
-  return clean;
+}
+
+/**
+ * What the gist holds: every key in storage.sync, each read through the feature that owns it. The
+ * gist is the one input gitchop does not author — a secret gist is unlisted rather than private,
+ * and an id can be adopted from anywhere — so what comes back is a stranger's until sanitized: a
+ * link that is not http(s) is dropped rather than stored, the list is capped, a switch is on or
+ * off, a repository is a well-formed name. The same functions read the local copy, so the two
+ * compare as equals when they are.
+ */
+const BACKED_UP = {
+  [LINKS_KEY]: sanitizeLinks,
+  [PANEL_KEY]: sanitizePanel,
+  [PULLS_SETTINGS_KEY]: pullsSettings,
+  [NEWS_SETTINGS_KEY]: newsSettings,
+  [CONTRIB_SETTINGS_KEY]: contribSettings,
+  [EFFECTS_KEY]: sanitizeEffects,
+};
+
+/** The local copy as the gist would hold it, keys in one fixed order so two snapshots compare as text. */
+async function loadBackup() {
+  const stored = await api.storage.sync.get(Object.keys(BACKED_UP));
+  const backup = {};
+  for (const [key, clean] of Object.entries(BACKED_UP)) backup[key] = clean(stored[key]);
+  return backup;
+}
+
+/**
+ * Writes the remote copy locally without the change bouncing straight back as a push. Only the keys
+ * the remote carries are written — a gist from before the settings joined the links has only links,
+ * and the settings here are left as they are — and only the keys the table knows, whatever else the
+ * file says. What lands is the merged whole, remembered as the snapshot in step with the gist.
+ */
+async function applyRemote(remote) {
+  const next = {};
+  for (const [key, clean] of Object.entries(BACKED_UP)) {
+    if (key in remote) next[key] = clean(remote[key]);
+  }
+  const merged = { ...(await loadBackup()), ...next };
+  inStep = JSON.stringify(merged);
+  await api.storage.sync.set(next);
+  return merged;
+}
+
+/** The gist as one flat object under storage keys, the links foremost, whatever shape the file had. */
+function flatten(store) {
+  return { ...store.settings, [LINKS_KEY]: store.links };
 }
 
 async function push({ force = false } = {}) {
   const config = await readConfig();
   if (config.tokens.length === 0 || !config.gistId) return { skipped: true };
 
-  const links = await loadLinks();
-  const payload = JSON.stringify(links);
+  const backup = await loadBackup();
+  const payload = JSON.stringify(backup);
   if (!force && payload === inStep) {
     await writeConfig({ dirty: false });
     return { changed: false };
   }
 
   try {
-    await withGistToken((token) => writeStore(token, config.gistId, links));
+    await withGistToken((token) => writeStore(token, config.gistId, backup));
   } catch (error) {
     await writeConfig({ lastError: String(error.message ?? error) });
     throw error;
@@ -221,6 +288,15 @@ async function push({ force = false } = {}) {
   inStep = payload;
   await writeConfig({ lastPushedAt: now(), dirty: false, lastError: null });
   return { changed: true };
+}
+
+/**
+ * A gist written before the settings joined the links holds none. Once its links are in, the whole
+ * is written back, so the next profile to pull gets the settings too — forced, because what is
+ * local is exactly what was just applied and would otherwise count as already current.
+ */
+function upgradeStore(store) {
+  if (store.format < 2) push({ force: true }).catch(() => {});
 }
 
 async function pull({ force = false } = {}) {
@@ -241,10 +317,11 @@ async function pull({ force = false } = {}) {
     throw error;
   }
 
-  const before = JSON.stringify(await loadLinks());
-  const applied = await applyRemote(remote.links);
+  const before = JSON.stringify(await loadBackup());
+  const applied = await applyRemote(flatten(remote));
   await writeConfig({ lastPulledAt: now(), lastError: null, dirty: false });
-  return { changed: JSON.stringify(applied) !== before, count: applied.length };
+  upgradeStore(remote);
+  return { changed: JSON.stringify(applied) !== before, count: applied[LINKS_KEY].length };
 }
 
 async function addToken({ token }) {
@@ -300,17 +377,20 @@ async function connectGist({ gistId }) {
   const wanted = String(gistId ?? '').trim();
 
   let id = wanted;
-  let links;
+  let remote;
+  let adopted = null;
   if (id) {
-    links = (await withGistToken((token) => readStore(token, id))).links;
+    adopted = await withGistToken((token) => readStore(token, id));
+    remote = flatten(adopted);
   } else {
-    const existing = await loadLinks();
-    links = existing.length > 0 ? existing : withIds(DEFAULT_LINKS);
-    id = (await withGistToken((token) => createStore(token, links))).id;
+    remote = await loadBackup();
+    if (remote[LINKS_KEY].length === 0) remote[LINKS_KEY] = withIds(DEFAULT_LINKS);
+    id = (await withGistToken((token) => createStore(token, remote))).id;
   }
 
-  await applyRemote(links);
+  await applyRemote(remote);
   await writeConfig({ gistId: id, lastPulledAt: now(), lastPushedAt: now(), dirty: false, lastError: null });
+  if (adopted) upgradeStore(adopted);
   return state();
 }
 
@@ -1010,10 +1090,15 @@ api.storage.onChanged.addListener((changes, area) => {
   // The subscriptions and the hour travel with the profile too, so an edit on another machine
   // re-arms the alarm here.
   if (area === 'sync' && changes[NEWS_SETTINGS_KEY]) scheduleNews().catch(() => {});
-  if (area !== 'sync' || !changes.links) return;
-  if (JSON.stringify(changes.links.newValue ?? []) === inStep) return;
-
-  writeConfig({ dirty: true }).catch(() => {});
-  clearTimeout(pushTimer);
-  pushTimer = setTimeout(() => push().catch(() => {}), PUSH_DELAY);
+  // Any key the gist holds: a link edited, a switch flipped, a repository subscribed from the menu.
+  // A pull landing reads back as the snapshot already in step, and is not bounced out again.
+  if (area !== 'sync' || !Object.keys(BACKED_UP).some((key) => key in changes)) return;
+  loadBackup()
+    .then((backup) => {
+      if (JSON.stringify(backup) === inStep) return;
+      writeConfig({ dirty: true }).catch(() => {});
+      clearTimeout(pushTimer);
+      pushTimer = setTimeout(() => push().catch(() => {}), PUSH_DELAY);
+    })
+    .catch(() => {});
 });

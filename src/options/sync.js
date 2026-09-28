@@ -385,8 +385,8 @@ function backupOff(sync, error) {
     element(
       'p',
       'note',
-      'Leave the field empty and a new secret gist is made from your current links. Paste the id of a ' +
-        'gist gitchop made before to adopt it instead; the list in it replaces this one.',
+      'Leave the field empty and a new secret gist is made from your links and settings. Paste the id ' +
+        'of a gist gitchop made before to adopt it instead; what it holds replaces what is here.',
     ),
   );
 
@@ -428,7 +428,7 @@ function backupOn(sync, error) {
   );
 
   const pull = button('Pull now');
-  pull.title = 'Replace the local list with the gist';
+  pull.title = 'Replace the links and settings here with the gist’s';
   pull.addEventListener('click', () =>
     guard(pull, 'backup', async (flash) => {
       if (sync.dirty && !confirm('There are local changes that have not reached the gist yet. Pull anyway and lose them?')) return;
@@ -439,7 +439,7 @@ function backupOn(sync, error) {
   );
 
   const push = button('Push now');
-  push.title = 'Write the local list to the gist';
+  push.title = 'Write the links and settings here to the gist';
   push.addEventListener('click', () =>
     guard(push, 'backup', async (flash) => {
       const result = await ask({ type: 'gitchop:sync:push', force: true });

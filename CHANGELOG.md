@@ -3,6 +3,20 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
+## Unreleased
+
+- **The gist backs up the settings, not the links alone.** Everything that lives in synced storage
+  now goes to the gist with the links: the repositories you subscribe to for news and the edition
+  hour, the switches under Panels and under Pull requests — the badge, and whether drafts count —
+  and the chop's colour, epicness, speed and menu delay. A repository subscribed from the menu is
+  pushed like an edited link, a beat and a half after the change. A pull replaces what is here with
+  what the gist holds, settings included, and every page of Settings follows. A gist written by an
+  earlier version holds only links: it is read as before, the settings here are left as they are,
+  and the whole is written back at once, so the next profile to pull gets the settings too;
+  adopting such a gist by id does the same. Tokens never go in it. The file gains a `settings`
+  block beside `links`, each setting under its storage key, and the gist's description now says
+  links and settings.
+
 ## 2.6.0
 
 - The token card in Settings is a recipe rather than an essay. The fine-grained token comes first,

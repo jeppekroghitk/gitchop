@@ -10,10 +10,11 @@ of any kind beyond GitHub itself.
 | What | Where | Leaves the device? |
 | --- | --- | --- |
 | Your links (icon, label, URL) | `storage.sync` | Only to your own gist, and only if you connect one |
+| Your settings — the switches under Panels and Pull requests, and the chop's colour, epicness, speed and menu delay | `storage.sync` | Only to your own gist, and only if you connect one |
 | Your GitHub token, if you add one | `storage.local` | Only to `api.github.com`, as an authorization header |
 | A list of repositories you can access | `storage.local` | No — never sent anywhere |
 | Your open pull requests — title, number, repository, author, review state | `storage.local` | No — never sent anywhere |
-| The repositories you subscribe to for news, as `owner/name` | `storage.sync` | No — it travels with the profile, as the links do |
+| The repositories you subscribe to for news, as `owner/name`, and the edition hour | `storage.sync` | Only to your own gist, and only if you connect one |
 | The day's news for them — commit counts and authors, the first line of the latest commit message, pull request, issue and release titles | `storage.local` | No — never sent anywhere |
 | Your contributions — this year's count, the three whole years before it, and your login | `storage.local` | No — never sent anywhere |
 | Which gist to use, and when it last synced | `storage.local` | No |
@@ -70,9 +71,12 @@ highest answer for this year kept. The numbers are kept in `storage.local` for t
 never sent anywhere. Switching the contributions off in Settings stops the requests; removing the
 last token deletes the snapshot.
 
-**Sync, only if you connect it.** Your link list is written to a secret gist on your own account, and
-read back from it. That is the entire payload: the icons, labels and URLs you entered. Firefox asks
-for your consent before this is switched on, and you can withdraw it in `about:addons`.
+**Backup, only if you connect it.** Your links and settings are written to a secret gist on your own
+account, and read back from it. That is the entire payload: the icons, labels and URLs you entered,
+the repositories you subscribe to for news and the edition hour, and the position of every switch
+and dial in Settings. Never a token, and nothing gitchop fetched from GitHub — not the repository
+list, the pull requests, the news or the contributions. Firefox asks for your consent before this is
+switched on, and you can withdraw it in `about:addons`.
 
 Nothing else is transmitted. gitchop does not read page content, does not track which pages you
 visit, and does not send your browsing anywhere. It runs on `github.com` only.
