@@ -1,7 +1,8 @@
 const API = 'https://api.github.com';
 const FILE = 'gitchop.json';
-const DESCRIPTION = 'gitchop — saved links';
-const FORMAT = 1;
+const DESCRIPTION = 'gitchop — links and settings';
+/** 1 was the links alone. 2 carries the settings beside them, under their storage keys. */
+const FORMAT = 2;
 
 function fail(status, body) {
   if (status === 401) return 'GitHub rejected the token. It may be expired or mistyped.';
@@ -26,8 +27,37 @@ async function call(token, path, { method = 'GET', body } = {}) {
   return response.json();
 }
 
-function serialise(links) {
-  return `${JSON.stringify({ app: 'gitchop', format: FORMAT, updatedAt: new Date().toISOString(), links }, null, 2)}\n`;
+/**
+ * The file as it is written. The links stand on their own, where a reader of the first format
+ * looks for them; everything else in the backup goes under `settings`, each under the storage key
+ * it lives at, so the file reads like the storage it mirrors.
+ */
+export function serialise(backup, at = new Date()) {
+  const { links = [], ...settings } = backup ?? {};
+  return `${JSON.stringify({ app: 'gitchop', format: FORMAT, updatedAt: at.toISOString(), links, settings }, null, 2)}\n`;
+}
+
+/**
+ * The file read back, whichever format wrote it. Links are required, as they always were; the
+ * settings are whatever the file carries, which for a file of the first format is nothing — and
+ * nothing means what is local is left alone, not reset. Every value is still a stranger's until
+ * the caller has run it through the feature that owns it.
+ */
+export function parseStore(text) {
+  let payload;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    throw new Error(`${FILE} is not valid JSON.`);
+  }
+  if (!Array.isArray(payload?.links)) throw new Error(`${FILE} has no links array.`);
+  const settings = payload.settings;
+  return {
+    format: Number.isInteger(payload.format) ? payload.format : 1,
+    links: payload.links,
+    settings: settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {},
+    updatedAt: typeof payload.updatedAt === 'string' ? payload.updatedAt : null,
+  };
 }
 
 const WRITE_SCOPES = /^(repo|workflow|delete_repo|admin:|write:)/;
@@ -75,13 +105,13 @@ export async function identify(token) {
   return { login: user.login, scopes, kind: header === null ? tokenKind(token) : 'classic' };
 }
 
-export async function createStore(token, links) {
+export async function createStore(token, backup) {
   const gist = await call(token, '/gists', {
     method: 'POST',
     body: {
       description: DESCRIPTION,
       public: false,
-      files: { [FILE]: { content: serialise(links) } },
+      files: { [FILE]: { content: serialise(backup) } },
     },
   });
   return { id: gist.id, url: gist.html_url };
@@ -95,22 +125,13 @@ export async function readStore(token, gistId) {
     throw new Error(`That gist has no ${FILE} (it holds ${names}).`);
   }
   if (file.truncated) throw new Error(`${FILE} is too large to read back.`);
-
-  let payload;
-  try {
-    payload = JSON.parse(file.content);
-  } catch {
-    throw new Error(`${FILE} is not valid JSON.`);
-  }
-  if (!Array.isArray(payload?.links)) throw new Error(`${FILE} has no links array.`);
-
-  return { links: payload.links, updatedAt: payload.updatedAt ?? null, url: gist.html_url };
+  return { ...parseStore(file.content), url: gist.html_url };
 }
 
-export async function writeStore(token, gistId, links) {
+export async function writeStore(token, gistId, backup) {
   const gist = await call(token, `/gists/${encodeURIComponent(gistId)}`, {
     method: 'PATCH',
-    body: { description: DESCRIPTION, files: { [FILE]: { content: serialise(links) } } },
+    body: { description: DESCRIPTION, files: { [FILE]: { content: serialise(backup) } } },
   });
   return { url: gist.html_url };
 }

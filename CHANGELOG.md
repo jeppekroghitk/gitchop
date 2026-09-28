@@ -3,6 +3,31 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
+## Unreleased
+
+- **The gist backs up the settings, not the links alone.** Everything that lives in synced storage
+  now goes to the gist with the links: the repositories you subscribe to for news and the edition
+  hour, the switches under Panels and under Pull requests — the badge, and whether drafts count —
+  and the chop's colour, epicness, speed and menu delay. A repository subscribed from the menu is
+  pushed like an edited link, a beat and a half after the change. A pull replaces what is here with
+  what the gist holds, settings included, and every page of Settings follows. A gist written by an
+  earlier version holds only links: it is read as before, the settings here are left as they are,
+  and the whole is written back at once, so the next profile to pull gets the settings too;
+  adopting such a gist by id does the same. Tokens never go in it. The file gains a `settings`
+  block beside `links`, each setting under its storage key, and the gist's description now says
+  links and settings.
+- **The news edition can cover up to a week.** A **Covers** slider beside the edition hour on the
+  News page says how far back each edition reaches, from a day to seven. A day is the paper as it
+  was: what happened since the previous edition. A week is the last seven days made up fresh each
+  morning — for a repository worth reading at a week's remove, or a menu opened on Fridays only.
+  The browser shut for longer still reaches back to the previous edition regardless, up to a week,
+  as before. Moving the slider makes up a new edition at once, since the one on file covers the
+  wrong span; the header says what the new one covers. It costs GitHub no more requests: the same
+  five per repository whatever the window, only bigger pages — a window longer than a day asks for
+  a hundred pull requests and issues rather than fifty, GitHub's largest page, so a busy week is
+  counted rather than cut — and a page more of commits, up to three, in a repository busy enough
+  to need it.
+
 ## 2.6.0
 
 - The token card in Settings is a recipe rather than an essay. The fine-grained token comes first,

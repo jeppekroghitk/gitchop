@@ -126,7 +126,11 @@ It is a morning paper rather than a feed. The edition is made up once a day, at 
 Settings says otherwise, and covers everything since the previous one: yesterday at the same hour
 on an ordinary day, and back to Friday's on a Monday if the browser was shut over the weekend, up
 to a week. It is then left alone until the next, so glancing at it twice in a day shows the same
-page. The header says what it covers.
+page. The header says what it covers. **Covers** in Settings stretches every edition to as much as
+a week — the last seven days, made up fresh each morning — for a repository worth reading at a
+week's remove, or a menu opened on Fridays only. That costs GitHub no more requests: the same five
+per repository whatever the window, only bigger pages, and a page more of commits in a repository
+busy enough to need it.
 
 To subscribe, press → on any repository row — a saved link that points at a repository, or a
 search result — and choose **Subscribe to news** under *Pull requests* and *Issues*; the same row
@@ -158,10 +162,13 @@ A switch under Panels in Settings turns it off.
 
 ## Backup
 
-Links live in the browser profile, and go with the extension if you remove it. Connect a secret gist
-under **Backup** in Settings and every change is written there as a new revision. The gist is written
-with whichever saved token can reach it: a fine-grained token for your own account, which the token
-link asks Gists for when the owner is left blank, or a classic token with `gist`.
+Links and settings live in the browser profile, and go with the extension if you remove it. Connect a
+secret gist under **Backup** in Settings and every change is written there as a new revision: the
+links, the repositories you subscribe to for news and the edition hour, the switches under Panels and
+Pull requests, and the chop. Tokens never go in it. A pull replaces what is here with what the gist
+holds; a gist made by an earlier version holds only links, and is written back whole once read. The
+gist is written with whichever saved token can reach it: a fine-grained token for your own account,
+which the token link asks Gists for when the owner is left blank, or a classic token with `gist`.
 
 [PRIVACY.md](PRIVACY.md) covers what is stored and what is sent to GitHub.
 
@@ -171,7 +178,7 @@ No build step for the code — the files in `src/` are what runs. Packaging only
 `manifest.json` each browser gets, since the two disagree about the background script.
 
 ```sh
-node dev/context.test.mjs && node dev/repos.test.mjs && node dev/effects.test.mjs && node dev/pulls.test.mjs && node dev/news.test.mjs && node dev/contributions.test.mjs && node dev/odometer.test.mjs && node dev/links.test.mjs
+node dev/context.test.mjs && node dev/repos.test.mjs && node dev/effects.test.mjs && node dev/pulls.test.mjs && node dev/news.test.mjs && node dev/contributions.test.mjs && node dev/odometer.test.mjs && node dev/links.test.mjs && node dev/gist.test.mjs
 node dev/build.mjs all                                 # dist/gitchop-<version>-<browser>.<ext>
 node dev/build.mjs chrome --no-zip                     # unpacked, for chrome://extensions
 open dev/harness.html                                  # the menu, without installing
