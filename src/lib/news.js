@@ -12,9 +12,16 @@ const MAX_REPOS = 30;
  * away is one digest rather than six lost days, short enough that the digest is still a digest.
  */
 export const LOOKBACK_DAYS = 7;
-/** How many pull requests, issues and releases are fetched per repository and window. */
+/**
+ * How many pull requests, issues and releases are fetched per repository and window: a page for a
+ * day, GitHub's largest for anything longer, since a week in a busy repository outruns fifty. It is
+ * one request either way; only the page grows.
+ */
 const PAGE = 50;
-/** Commits come a hundred a page, up to this many pages; a busier day than that says "more on GitHub". */
+const PAGE_LONG = 100;
+/** A window this long is more than one day's edition, clock changes included, and gets the larger page. */
+const LONG_WINDOW = 36 * 60 * 60 * 1000;
+/** Commits come a hundred a page, up to this many pages; a busier window than that says "more on GitHub". */
 const COMMIT_PAGE = 100;
 const COMMIT_PAGES = 3;
 
@@ -29,10 +36,30 @@ export const HOUR = {
   min: 0,
   max: 23,
   value: 8,
-  hint: 'The hour each day the edition is made up. It covers everything since the previous one — yesterday at the same hour, or further back if the browser was shut.',
+  hint: 'The hour each day the edition is made up, and the hour it runs to.',
 };
 
-export const DEFAULTS = { ...Object.fromEntries(SWITCHES.map((item) => [item.id, item.value])), hour: HOUR.value, repos: [] };
+/**
+ * How far back each edition reaches, in days. A day is the paper as it began: what happened since
+ * the previous edition. A week is the last seven days made up fresh each morning, for a repository
+ * worth reading at a week's remove, or a menu opened on Fridays only. The browser shut for longer
+ * than that reaches back to the previous edition regardless, up to LOOKBACK_DAYS.
+ */
+export const DAYS = {
+  id: 'days',
+  label: 'Covers',
+  min: 1,
+  max: LOOKBACK_DAYS,
+  value: 1,
+  hint: 'How far back each edition reaches. A day is what happened since the previous edition; a week is the last seven days, made up fresh each morning. Shut the browser for longer and the edition reaches back to the previous one regardless, up to a week.',
+};
+
+export const DEFAULTS = {
+  ...Object.fromEntries(SWITCHES.map((item) => [item.id, item.value])),
+  hour: HOUR.value,
+  days: DAYS.value,
+  repos: [],
+};
 
 export function isRepoName(name) {
   return typeof name === 'string' && name.length <= 140 && REPO_NAME.test(name);
@@ -56,6 +83,8 @@ export function sanitizeSettings(raw) {
   }
   const hour = Number(source.hour);
   settings.hour = Number.isInteger(hour) && hour >= HOUR.min && hour <= HOUR.max ? hour : HOUR.value;
+  const days = Number(source.days);
+  settings.days = Number.isInteger(days) && days >= DAYS.min && days <= DAYS.max ? days : DAYS.value;
 
   const repos = [];
   for (const entry of Array.isArray(source.repos) ? source.repos : []) {
@@ -106,22 +135,31 @@ export function nextEditionTime(now, hour) {
 
 /**
  * What an edition covers. Made up daily, it runs from the previous edition's cutoff to its own —
- * yesterday at the same hour, on an ordinary day. Shut the browser for a long weekend and Monday's
- * edition reaches back to Friday's instead of losing the days between, up to a week; with no
- * previous edition it is the plain day. Asked again for the same edition — a manual refresh, a
- * repository subscribed at noon — it keeps the window it had, so the header does not move.
+ * yesterday at the same hour, on an ordinary day — or as many days back as Settings asks, a week
+ * at most. Shut the browser for a long weekend and Monday's edition reaches back to Friday's
+ * instead of losing the days between, up to a week; with no previous edition it is the plain
+ * span. Asked again for the same edition — a manual refresh, a repository subscribed at noon — it
+ * keeps the window it had, so the header does not move. An edition made up under another span
+ * says nothing about this one: change the span and the window is drawn afresh.
  */
-export function editionWindow(now, hour, previous = null) {
+export function editionWindow(now, hour, previous = null, days = DAYS.value) {
   const until = editionTime(now, hour);
-  const day = until - DAY;
-  const before = Date.parse(previous?.until ?? '');
-  const from = Date.parse(previous?.since ?? '');
-  let since = day;
+  const span = until - Math.min(LOOKBACK_DAYS, Math.max(1, days)) * DAY;
+  const known = (previous?.days ?? DAYS.value) === days ? previous : null;
+  const before = Date.parse(known?.until ?? '');
+  const from = Date.parse(known?.since ?? '');
+  let since = span;
   if (!Number.isNaN(before)) {
     if (before === until && !Number.isNaN(from) && from < until) since = from;
-    else since = Math.max(until - LOOKBACK_DAYS * DAY, Math.min(before, day));
+    else since = Math.max(until - LOOKBACK_DAYS * DAY, Math.min(before, span));
   }
   return { since: new Date(since).toISOString(), until: new Date(until).toISOString() };
+}
+
+/** Whether the edition on file is the one Settings would make up now: the same cutoff, the same span. */
+export function isCurrentEdition(cache, settings, now) {
+  if (!cache?.until) return false;
+  return Date.parse(cache.until) === editionTime(now, settings.hour) && (cache.days ?? DAYS.value) === settings.days;
 }
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -194,8 +232,8 @@ export function shapeCommits(list, window, branch) {
  * A full page whose oldest item still moved inside the window may have left some behind; a full
  * page whose oldest item is older than the window has shown everything the window holds.
  */
-function pageCut(list, window) {
-  if (!Array.isArray(list) || list.length < PAGE) return false;
+function pageCut(list, window, size = PAGE) {
+  if (!Array.isArray(list) || list.length < size) return false;
   const oldest = Date.parse(list[list.length - 1]?.updated_at ?? '');
   return Number.isNaN(oldest) || oldest >= Date.parse(window.since);
 }
@@ -213,7 +251,7 @@ function shapeIssueLike(item) {
  * A pull request is news for one reason at a time: merged beats opened beats closed without
  * merging, and a pull request opened and merged inside the window shows once, as merged.
  */
-export function shapePulls(list, window) {
+export function shapePulls(list, window, size = PAGE) {
   const merged = [];
   const opened = [];
   const closed = [];
@@ -223,11 +261,11 @@ export function shapePulls(list, window) {
     else if (within(item.created_at, window)) opened.push(shapeIssueLike(item));
     else if (item.state === 'closed' && within(item.closed_at, window)) closed.push(shapeIssueLike(item));
   }
-  return { merged, opened, closed, more: pageCut(list, window) };
+  return { merged, opened, closed, more: pageCut(list, window, size) };
 }
 
 /** The issues endpoint returns pull requests too; anything carrying a pull_request key is not an issue. */
-export function shapeIssues(list, window) {
+export function shapeIssues(list, window, size = PAGE) {
   const opened = [];
   const closed = [];
   for (const item of Array.isArray(list) ? list : []) {
@@ -235,7 +273,7 @@ export function shapeIssues(list, window) {
     if (within(item.created_at, window)) opened.push(shapeIssueLike(item));
     else if (item.state === 'closed' && within(item.closed_at, window)) closed.push(shapeIssueLike(item));
   }
-  return { opened, closed, more: pageCut(list, window) };
+  return { opened, closed, more: pageCut(list, window, size) };
 }
 
 /** Drafts are not published; a prerelease is, and says so. */
@@ -477,22 +515,31 @@ async function getCommits(base, branch, window, token) {
   return { ok: true, status: 200, body: all };
 }
 
+/** The page for pull requests and issues: a day's, or the largest GitHub gives for a longer window. */
+export function pageSize(window) {
+  const span = Date.parse(window.until) - Date.parse(window.since);
+  return span > LONG_WINDOW ? PAGE_LONG : PAGE;
+}
+
 /**
- * One repository's window, in four requests after the lookup — a fifth and sixth only on a day
+ * One repository's window, in four requests after the lookup — a fifth and sixth only on a window
  * with more than a hundred commits: the commits on the default branch inside it, the pull
- * requests and issues that moved lately, and the recent releases. Everything is filtered here
- * against the window, because only the commits endpoint takes an `until`.
+ * requests and issues that moved lately, and the recent releases. The count of requests is the
+ * same whatever the window covers; a longer one asks for bigger pages, not more of them.
+ * Everything is filtered here against the window, because only the commits endpoint takes an
+ * `until`.
  */
 export async function fetchDigest(repo, window, token) {
   const about = await lookupRepo(repo, token);
   const base = `/repos/${about.fullName.split('/').map(encodeURIComponent).join('/')}`;
   const branch = about.branch ? `&sha=${encodeURIComponent(about.branch)}` : '';
   const since = encodeURIComponent(window.since);
+  const size = pageSize(window);
 
   const [commits, pulls, issues, releases] = await Promise.all([
     getCommits(base, branch, window, token),
-    get(`${base}/pulls?state=all&sort=updated&direction=desc&per_page=${PAGE}`, token),
-    get(`${base}/issues?state=all&since=${since}&sort=updated&direction=desc&per_page=${PAGE}`, token),
+    get(`${base}/pulls?state=all&sort=updated&direction=desc&per_page=${size}`, token),
+    get(`${base}/issues?state=all&since=${since}&sort=updated&direction=desc&per_page=${size}`, token),
     get(`${base}/releases?per_page=20`, token),
   ]);
 
@@ -505,8 +552,8 @@ export async function fetchDigest(repo, window, token) {
     url: about.url,
     private: about.private,
     commits: shapeCommits(commits.ok ? commits.body : [], window, about.branch),
-    pulls: shapePulls(pulls.body, window),
-    issues: shapeIssues(issues.body, window),
+    pulls: shapePulls(pulls.body, window, size),
+    issues: shapeIssues(issues.body, window, size),
     releases: shapeReleases(releases.body, window),
   };
 }

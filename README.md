@@ -126,7 +126,11 @@ It is a morning paper rather than a feed. The edition is made up once a day, at 
 Settings says otherwise, and covers everything since the previous one: yesterday at the same hour
 on an ordinary day, and back to Friday's on a Monday if the browser was shut over the weekend, up
 to a week. It is then left alone until the next, so glancing at it twice in a day shows the same
-page. The header says what it covers.
+page. The header says what it covers. **Covers** in Settings stretches every edition to as much as
+a week — the last seven days, made up fresh each morning — for a repository worth reading at a
+week's remove, or a menu opened on Fridays only. That costs GitHub no more requests: the same five
+per repository whatever the window, only bigger pages, and a page more of commits in a repository
+busy enough to need it.
 
 To subscribe, press → on any repository row — a saved link that points at a repository, or a
 search result — and choose **Subscribe to news** under *Pull requests* and *Issues*; the same row

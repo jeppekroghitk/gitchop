@@ -1,5 +1,5 @@
 import { api } from '../lib/links.js';
-import { HOUR, isRepoName, proseText } from '../lib/news.js';
+import { DAYS, HOUR, isRepoName, proseText } from '../lib/news.js';
 
 const host = document.getElementById('news');
 const statusEl = document.getElementById('news-status');
@@ -111,6 +111,44 @@ function hourRow(state) {
   return row;
 }
 
+/** "a day", "3 days", "a week" — the span as a person would say it. */
+function span(days) {
+  if (days === 1) return 'a day';
+  if (days === DAYS.max) return 'a week';
+  return `${days} days`;
+}
+
+/** How far back the edition reaches; saved when the thumb is let go of, said in days while it moves. */
+function daysRow(state) {
+  const row = element('div', 'slider');
+  row.title = DAYS.hint;
+
+  const label = element('label', null, DAYS.label);
+  label.htmlFor = 'news-days';
+
+  const input = element('input');
+  input.type = 'range';
+  input.id = 'news-days';
+  input.min = String(DAYS.min);
+  input.max = String(DAYS.max);
+  input.step = '1';
+  input.value = String(state.settings.days);
+  input.disabled = state.settings.enabled !== 1;
+
+  const output = element('output', null, span(state.settings.days));
+  output.htmlFor = input.id;
+
+  input.addEventListener('input', () => {
+    output.textContent = span(Number(input.value));
+  });
+  input.addEventListener('change', () =>
+    guard(input, () => apply({ type: 'gitchop:news:settings', patch: { days: Number(input.value) } }, 'saved')),
+  );
+
+  row.append(label, input, output);
+  return row;
+}
+
 /** Every subscribed repository, with what the edition made of it and a way out. */
 function repoList(state) {
   const wrap = element('div', 'tokens');
@@ -191,10 +229,10 @@ function render(state, error) {
     return;
   }
 
-  // The column's own switch is under Panels with the other columns'; the hour is here.
+  // The column's own switch is under Panels with the other columns'; the hour and the span are here.
   const controls = element('div', 'sliders');
   controls.dataset.off = String(state.settings.enabled !== 1);
-  controls.append(hourRow(state));
+  controls.append(hourRow(state), daysRow(state));
   wrap.append(controls);
   if (state.settings.enabled !== 1) notes.append(element('p', 'note', 'The column is switched off under Panels.'));
 

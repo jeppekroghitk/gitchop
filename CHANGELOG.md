@@ -16,6 +16,17 @@ it from.
   adopting such a gist by id does the same. Tokens never go in it. The file gains a `settings`
   block beside `links`, each setting under its storage key, and the gist's description now says
   links and settings.
+- **The news edition can cover up to a week.** A **Covers** slider beside the edition hour on the
+  News page says how far back each edition reaches, from a day to seven. A day is the paper as it
+  was: what happened since the previous edition. A week is the last seven days made up fresh each
+  morning — for a repository worth reading at a week's remove, or a menu opened on Fridays only.
+  The browser shut for longer still reaches back to the previous edition regardless, up to a week,
+  as before. Moving the slider makes up a new edition at once, since the one on file covers the
+  wrong span; the header says what the new one covers. It costs GitHub no more requests: the same
+  five per repository whatever the window, only bigger pages — a window longer than a day asks for
+  a hundred pull requests and issues rather than fifty, GitHub's largest page, so a busy week is
+  counted rather than cut — and a page more of commits, up to three, in a repository busy enough
+  to need it.
 
 ## 2.6.0
 

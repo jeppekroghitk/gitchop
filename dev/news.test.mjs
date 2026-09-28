@@ -3,6 +3,7 @@ process.env.TZ = 'Europe/Copenhagen';
 
 import assert from 'node:assert';
 import {
+  DAYS,
   DEFAULTS,
   HOUR,
   LOOKBACK_DAYS,
@@ -11,11 +12,13 @@ import {
   editionTime,
   editionWindow,
   emptyDigest,
+  isCurrentEdition,
   isQuiet,
   isRepoName,
   isSubscribed,
   listPhrase,
   nextEditionTime,
+  pageSize,
   proseFor,
   proseText,
   sanitizeSettings,
@@ -30,11 +33,18 @@ import {
 assert.deepEqual(sanitizeSettings(), DEFAULTS, 'nothing stored means the defaults');
 assert.deepEqual(sanitizeSettings(null), DEFAULTS);
 assert.deepEqual(sanitizeSettings('junk'), DEFAULTS);
-assert.deepEqual(DEFAULTS, { enabled: 1, hour: 8, repos: [] }, 'on, at eight, following nothing yet');
+assert.deepEqual(DEFAULTS, { enabled: 1, hour: 8, days: 1, repos: [] }, 'on, at eight, a day at a time, following nothing yet');
 assert.equal(sanitizeSettings({ enabled: '0' }).enabled, 0);
 assert.equal(sanitizeSettings({ hour: 23 }).hour, 23);
 assert.equal(sanitizeSettings({ hour: 24 }).hour, HOUR.value, 'an hour off the clock is the default');
 assert.equal(sanitizeSettings({ hour: 7.5 }).hour, HOUR.value, 'a whole hour or nothing');
+assert.equal(sanitizeSettings({ days: 7 }).days, 7, 'up to a week');
+assert.equal(sanitizeSettings({ days: '3' }).days, 3, 'a numeric string is a number');
+assert.equal(sanitizeSettings({ days: 8 }).days, DAYS.value, 'more than a week is the default');
+assert.equal(sanitizeSettings({ days: 0 }).days, DAYS.value, 'no span at all is the default');
+assert.equal(sanitizeSettings({ days: 2.5 }).days, DAYS.value, 'whole days or nothing');
+assert.equal(DAYS.max, LOOKBACK_DAYS, 'the slider stops where the catch-up does');
+assert.ok(DAYS.label && DAYS.hint && HOUR.label && HOUR.hint, 'both sliders carry their settings-page text');
 assert.deepEqual(
   sanitizeSettings({ repos: ['itk-dev/economics', ' ITK-dev/Economics ', 'not a repo', 'a/b/c', 42, 'os2display/display-api-service'] }).repos,
   ['itk-dev/economics', 'os2display/display-api-service'],
@@ -106,6 +116,40 @@ assert.deepEqual(
   'moving the hour later the same day: a plain day ending at the new hour',
 );
 
+// A longer span: the edition reaches back as many days as asked, drawn afresh when the span changes.
+const week = editionWindow(now, 8, null, 7);
+assert.deepEqual(week, { since: '2026-09-10T06:00:00.000Z', until: fresh.until }, 'a week: the last seven days, ending at eight');
+assert.deepEqual(editionWindow(now, 8, { ...fresh, days: 1 }, 7), week, 'an edition made up for a day says nothing about a week');
+assert.deepEqual(editionWindow(now, 8, { ...week, days: 7 }, 7), week, 'asked again for the same week, the window stays put');
+assert.deepEqual(editionWindow(now, 8, { ...week, days: 7 }, 1), fresh, 'back to a day: a plain day, whatever the week covered');
+assert.deepEqual(editionWindow(now, 8, fresh, 1), fresh, 'an edition from before the span existed counts as a day');
+assert.deepEqual(
+  editionWindow(monday, 8, { ...friday, days: 2 }, 2),
+  { since: friday.until, until: '2026-09-21T06:00:00.000Z' },
+  'two days would stop at Saturday; the weekend away still reaches back to Friday',
+);
+assert.equal(editionWindow(monday, 8, { ...friday, days: 3 }, 3).since, friday.until, 'three days is exactly Friday to Monday');
+assert.equal(editionWindow(now, 8, null, 30).since, week.since, 'more than a week is a week');
+assert.equal(editionWindow(now, 8, null, 0).since, fresh.since, 'less than a day is a day');
+
+// Whether the edition on file is the one Settings would make up now.
+const daily = sanitizeSettings({ hour: 8, days: 1 });
+const weekly = sanitizeSettings({ hour: 8, days: 7 });
+assert.ok(isCurrentEdition({ ...fresh, days: 1 }, daily, now), 'this morning, a day');
+assert.ok(isCurrentEdition(fresh, daily, now), 'an edition from before the span existed is a day');
+assert.ok(!isCurrentEdition({ ...fresh, days: 7 }, daily, now), 'a week on file when a day is asked is not current');
+assert.ok(!isCurrentEdition({ ...week, days: 7 }, daily, now));
+assert.ok(isCurrentEdition({ ...week, days: 7 }, weekly, now));
+assert.ok(!isCurrentEdition(fresh, sanitizeSettings({ hour: 20, days: 1 }), now), 'another hour is another edition');
+assert.ok(!isCurrentEdition(null, daily, now));
+assert.ok(!isCurrentEdition({ since: 'junk', until: 'junk' }, daily, now));
+
+// The page: fifty for a day, GitHub's hundred for anything longer, clock changes notwithstanding.
+assert.equal(pageSize(fresh), 50, "a day's window takes a page of fifty");
+assert.equal(pageSize(week), 100, 'a week asks for the largest page GitHub gives');
+assert.equal(pageSize(editionWindow(monday, 8, friday)), 100, 'so does a weekend away');
+assert.equal(pageSize({ since: '2026-10-24T06:00:00.000Z', until: '2026-10-25T07:00:00.000Z' }), 50, 'a 25-hour day across the clock change is still a day');
+
 // The header's one fact.
 assert.equal(describeSince('2026-09-16T06:00:00.000Z', now), 'since yesterday 08:00');
 assert.equal(describeSince('2026-09-18T06:00:00.000Z', monday), 'since Friday 08:00');
@@ -176,6 +220,8 @@ const flood = shapePulls(Array.from({ length: 50 }, (_, i) => pr(i, { created_at
 assert.equal(flood.opened.length, 50, 'nothing is cut here — the popover scrolls');
 assert.ok(flood.more, 'a full page whose oldest item still moved inside the window may have left some behind');
 assert.ok(!shapePulls(Array.from({ length: 50 }, (_, i) => pr(i, { updated_at: before })), window).more, 'a full page older than the window has shown everything');
+assert.ok(!shapePulls(Array.from({ length: 50 }, (_, i) => pr(i, { created_at: inside, updated_at: inside })), window, 100).more, 'fifty of a hundred asked for is not a full page');
+assert.ok(shapePulls(Array.from({ length: 100 }, (_, i) => pr(i, { created_at: inside, updated_at: inside })), window, 100).more, 'a hundred of a hundred is');
 
 const issues = shapeIssues(
   [

@@ -24,10 +24,10 @@ import {
 import {
   SETTINGS_KEY as NEWS_SETTINGS_KEY,
   describeSince,
-  editionTime,
   editionWindow,
   emptyDigest,
   fetchDigest,
+  isCurrentEdition,
   isQuiet,
   nextEditionTime,
   proseFor,
@@ -591,7 +591,8 @@ async function schedulePulls() {
 
 /**
  * The news is an edition, not a feed: made up once a day at the hour set in Settings, covering
- * everything since the previous one, and shown unchanged until the next. It is a snapshot in
+ * everything since the previous one — or as many days back as Settings asks, a week at most — and
+ * shown unchanged until the next. It is a snapshot in
  * storage.local the menu paints from instantly. The refresh runs when the edition on file is not
  * the current one — on the alarm at the hour, when the menu asks, when a repository subscribed at
  * noon has no place in it yet — and a repository that failed is asked again after a while rather
@@ -619,9 +620,9 @@ async function readNewsCache() {
   return stored[NEWS_CACHE_KEY] ?? null;
 }
 
-/** The edition on file is this morning's, and every subscribed repository has a place in it. */
+/** The edition on file is this morning's, covering what Settings asks, and every subscribed repository has a place in it. */
 function newsIsStale(cache, settings, at = Date.now()) {
-  if (!cache?.until || Date.parse(cache.until) !== editionTime(at, settings.hour)) return true;
+  if (!isCurrentEdition(cache, settings, at)) return true;
   return settings.repos.some((repo) => {
     const part = cache.repos?.[repo.toLowerCase()];
     if (!part) return true;
@@ -671,7 +672,7 @@ function refreshNews({ force = false } = {}) {
     // Switched off, nothing is looking: the start-of-browser refresh spends no requests on it.
     if (!force && (settings.enabled !== 1 || !newsIsStale(previous, settings, at))) return previous;
 
-    const window = editionWindow(at, settings.hour, previous);
+    const window = editionWindow(at, settings.hour, previous, settings.days);
     const sameEdition = previous?.until === window.until && previous?.since === window.since;
     const tokens = await loadTokens();
     const repos = {};
@@ -691,7 +692,7 @@ function refreshNews({ force = false } = {}) {
       }
     }
 
-    const next = { since: window.since, until: window.until, hour: settings.hour, fetchedAt: now(), repos };
+    const next = { since: window.since, until: window.until, hour: settings.hour, days: settings.days, fetchedAt: now(), repos };
     await api.storage.local.set({ [NEWS_CACHE_KEY]: next });
     return next;
   })().finally(() => {
@@ -732,8 +733,8 @@ function presentNews(cache, settings) {
 async function newsState() {
   const [settings, cache] = await Promise.all([readNewsSettings(), readNewsCache()]);
   const at = Date.now();
-  const current = cache && Date.parse(cache.until) === editionTime(at, settings.hour) ? cache : null;
-  const window = current ? { since: current.since, until: current.until } : editionWindow(at, settings.hour, cache);
+  const current = isCurrentEdition(cache, settings, at) ? cache : null;
+  const window = current ? { since: current.since, until: current.until } : editionWindow(at, settings.hour, cache, settings.days);
   return {
     settings,
     show: settings.enabled === 1,
@@ -940,10 +941,13 @@ const HANDLERS = {
     return newsState();
   },
   'gitchop:news:settings': async (message) => {
-    // The switch and the hour only; the list has its own two messages.
+    // The switch, the hour and the span only; the list has its own two messages.
     const settings = await readNewsSettings();
     await writeNewsSettings({ ...settings, ...(message.patch ?? {}), repos: settings.repos });
     await scheduleNews();
+    // A new span is a new edition; start on it now, so the menu's next open finds it made up
+    // rather than skeletons.
+    if ((await readNewsSettings()).days !== settings.days) refreshNews().catch(() => {});
     return newsState();
   },
   'gitchop:news:subscribe': (message) => subscribeNews(message.repo, true),

@@ -294,11 +294,22 @@
       // row shows the way in), ?news=fail has one repository the token cannot see, and ?news=cached
       // paints this morning's edition straight away instead of skeletons first.
       const newsMode = params.get('news') ?? 'on';
-      const newsSettings = { enabled: newsMode === 'off' ? 0 : 1, hour: 8 };
+      const newsSettings = { enabled: newsMode === 'off' ? 0 : 1, hour: 8, days: 1 };
       let newsFilled = newsMode === 'cached';
       const clock = (hour) => `${String(hour).padStart(2, '0')}:00`;
       const newsRepos = newsMode === 'empty' ? [] : ['itk-dev/economics', 'os2display/display-api-service', 'Leantime/leantime'];
-      const newsWindow = { since: '2026-09-16T06:00:00.000Z', until: '2026-09-17T06:00:00.000Z' };
+      // The window follows the span the settings page sets, as the background's would; the hour is
+      // shown in the label only, since the fixed edition is pinned to the fixture's morning.
+      const NEWS_UNTIL = Date.parse('2026-09-17T06:00:00.000Z');
+      const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      function newsWindow() {
+        const since = NEWS_UNTIL - newsSettings.days * 24 * 60 * 60 * 1000;
+        const at = new Date(since);
+        const time = clock(newsSettings.hour);
+        const sinceLabel =
+          newsSettings.days === 1 ? `since yesterday ${time}` : newsSettings.days < 7 ? `since ${WEEKDAYS[at.getDay()]} ${time}` : `since ${at.getDate()} Sep ${time}`;
+        return { since: at.toISOString(), until: new Date(NEWS_UNTIL).toISOString(), sinceLabel };
+      }
       // Prose as the background writes it: plain text and chips, each chip carrying what its
       // popover lists and what Enter opens.
       const seg = (text) => ({ text });
@@ -365,8 +376,7 @@
           show: newsSettings.enabled === 1,
           settings: { ...newsSettings, repos: newsRepos.slice() },
           stale: !filled,
-          ...newsWindow,
-          sinceLabel: `since yesterday ${clock(newsSettings.hour)}`,
+          ...newsWindow(),
           fetchedAt: filled ? '2026-09-17T06:00:04.000Z' : null,
           repos,
         };
