@@ -89,11 +89,12 @@ window.__gitchop = window.__gitchop || {};
     // The pull requests, the news and the contributions answer from their snapshots, so this is
     // storage reads only; no request holds the menu up, and a background that cannot answer simply
     // means no column, and no number, this time.
-    const [links, pulls, news, contributions] = await Promise.all([
+    const [links, pulls, news, contributions, panel] = await Promise.all([
       readLinks(),
       ask({ type: 'gitchop:pulls' }),
       ask({ type: 'gitchop:news' }),
       ask({ type: 'gitchop:contributions' }),
+      ask({ type: 'gitchop:panel' }),
     ]);
     if (state.stage !== stage) return;
 
@@ -104,6 +105,7 @@ window.__gitchop = window.__gitchop || {};
       pulls: pulls?.ok ? pulls : null,
       news: news?.ok ? news : null,
       contributions: contributions?.ok ? contributions : null,
+      panel: panel?.ok ? panel : null,
       onClose: closeChop,
       onOptions: () => {
         ask({ type: 'gitchop:options' });

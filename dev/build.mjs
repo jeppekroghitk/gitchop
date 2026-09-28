@@ -93,7 +93,9 @@ function stage(target, manifest) {
 /**
  * There is no bundler between the source and the browser, so a mistyped path is only discovered
  * when the extension is already installed. These are the three ways that happens: a manifest entry,
- * a script or stylesheet in an options page, and an ES import between modules.
+ * a script or stylesheet in an options page, and an ES import between modules. A script that does
+ * not parse is the fourth — the tests load the libraries but not the content scripts or the options
+ * page — so every script is handed to node to check, module or classic alike.
  */
 function verify(dir, manifest) {
   const problems = [];
@@ -131,6 +133,12 @@ function verify(dir, manifest) {
         if (!specifier.startsWith('.')) continue;
         const resolved = path.normalize(path.join(from, specifier));
         if (!has(resolved)) problems.push(`${file} imports a missing module: ${specifier}`);
+      }
+      try {
+        execFileSync(process.execPath, ['--check', path.join(dir, file)], { stdio: ['ignore', 'ignore', 'pipe'] });
+      } catch (error) {
+        const said = String(error.stderr ?? '').split('\n').find((line) => /Error/.test(line)) ?? 'it does not parse';
+        problems.push(`${file} does not parse: ${said.trim()}`);
       }
     }
   }

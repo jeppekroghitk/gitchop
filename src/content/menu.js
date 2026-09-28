@@ -50,7 +50,13 @@ window.__gitchop = window.__gitchop || {};
   /** How long a popover outlives the mouse leaving its chip — long enough to reach it diagonally. */
   const POP_LINGER = 120;
 
-  gc.createMenu = function createMenu({ ctx, links, pulls, news, contributions, onClose, onOptions, onLinksChanged }) {
+  gc.createMenu = function createMenu({ ctx, links, pulls, news, contributions, panel: panelSetting, onClose, onOptions, onLinksChanged }) {
+    /**
+     * The panel — the links and the search — is the menu unless switched off in Settings; then the
+     * columns stand on their own, the news alone if that is all that is on. It is never nothing:
+     * with no column to stand, the panel stays whatever the switch says.
+     */
+    const hasPanel = panelSetting?.show !== false || !(pulls?.show || (Boolean(news?.show) && (news?.repos?.length ?? 0) > 0));
     const panel = node('div', 'gc-panel');
     panel.setAttribute('role', 'dialog');
     panel.setAttribute('aria-modal', 'true');
@@ -102,8 +108,6 @@ window.__gitchop = window.__gitchop || {};
     foot.append(keys);
 
     panel.append(head, filter, list, foot);
-    // The years hang from the panel, not the head, so they can lie over the filter beneath.
-    if (count) panel.append(count.pop);
 
     /**
      * The panel and the columns beside it rise into the cut as one slab, so the stage is what the
@@ -112,10 +116,13 @@ window.__gitchop = window.__gitchop || {};
      * news switch on. Without them the stage is the panel alone, exactly as before.
      */
     const stage = node('div', 'gc-stage');
-    stage.dataset.region = 'panel';
+    stage.dataset.region = hasPanel ? 'panel' : 'pulls';
+    stage.dataset.panel = String(hasPanel);
     stage.dataset.pulls = String(Boolean(pulls?.show));
     stage.dataset.news = String(Boolean(news?.show) && (news?.repos?.length ?? 0) > 0);
-    stage.append(panel);
+    // Focusable, so that with no panel to hold the keys the stage itself does, and Escape still closes.
+    stage.tabIndex = -1;
+    if (hasPanel) stage.append(panel);
 
     // The news column is in the tree whenever the feature is on, and in the layout only while
     // something is subscribed — so the first subscription made from the menu raises it at once,
@@ -134,7 +141,7 @@ window.__gitchop = window.__gitchop || {};
       newsList = node('ul', 'gc-list gc-lanes');
       newsList.setAttribute('aria-label', 'News');
       newsEl.append(newsHead, newsList);
-      stage.insertBefore(newsEl, panel);
+      stage.prepend(newsEl);
     }
 
     let pullsEl = null;
@@ -150,6 +157,17 @@ window.__gitchop = window.__gitchop || {};
       pullsList.tabIndex = -1;
       pullsEl.append(pullsHead, pullsList);
       stage.append(pullsEl);
+    }
+
+    /**
+     * The count and its years hang in the panel's head; without the panel, in the head of the
+     * column standing nearest where the panel would have been. The years hang from that column
+     * rather than its head, so they can lie over what is beneath.
+     */
+    if (count) {
+      count.home = hasPanel ? panel : (pullsEl ?? newsEl);
+      if (!hasPanel) count.home?.querySelector('.gc-head')?.append(count.element);
+      count.home?.append(count.pop);
     }
 
     // The full title of a pull request whose row had to cut it short, shown the instant the row is
@@ -339,7 +357,7 @@ window.__gitchop = window.__gitchop || {};
     let drill = null;
     // Which column the keyboard is in. Focus itself sits on the filter or on the pull requests list;
     // this is the same fact, kept where paint() can read it without asking the DOM.
-    let region = 'panel';
+    let region = hasPanel ? 'panel' : 'pulls';
     let pullsData = pulls ?? null;
     let pullsItems = [];
     let pullsIndex = 0;
@@ -497,7 +515,7 @@ window.__gitchop = window.__gitchop || {};
 
     /** The columns the cursor can be in, left to right; the news is not one, being read with the mouse. */
     function regions() {
-      const order = ['panel'];
+      const order = hasPanel ? ['panel'] : [];
       if (pullsVisible() && pullsItems.length > 0) order.push('pulls');
       return order;
     }
@@ -883,7 +901,7 @@ window.__gitchop = window.__gitchop || {};
      */
     function showYears() {
       if (!count || count.past.length === 0 || count.element.hidden) return;
-      const box = panel.getBoundingClientRect();
+      const box = count.home.getBoundingClientRect();
       const at = count.element.getBoundingClientRect();
       count.pop.style.right = `${Math.round(box.right - at.right)}px`;
       count.pop.style.top = `${Math.round(at.bottom - box.top)}px`;
@@ -1034,6 +1052,7 @@ window.__gitchop = window.__gitchop || {};
     }
 
     function toPanel() {
+      if (!hasPanel) return;
       region = 'panel';
       stage.dataset.region = region;
       filter.focus({ preventScroll: true });
@@ -1263,7 +1282,7 @@ window.__gitchop = window.__gitchop || {};
         event.preventDefault();
         event.stopPropagation();
         if (form) closeForm();
-        else if (region !== 'panel') toPanel();
+        else if (hasPanel && region !== 'panel') toPanel();
         else if (!leaveDrill()) onClose();
         return;
       }
@@ -1346,7 +1365,9 @@ window.__gitchop = window.__gitchop || {};
        * refresh would leave it not mentioning them until the cursor moved.
        */
       focus() {
-        filter.focus();
+        if (hasPanel) filter.focus();
+        else if (pullsVisible() && pullsItems.length > 0) toPulls();
+        else stage.focus({ preventScroll: true });
         paint();
       },
       /** The panel has risen: the reels may roll up to the number now, where the roll can be seen. */

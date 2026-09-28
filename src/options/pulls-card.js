@@ -1,8 +1,11 @@
 import { api } from '../lib/links.js';
 import { SWITCHES } from '../lib/pulls.js';
+import { tokenGate } from './pages.js';
 
 const host = document.getElementById('pulls');
 const statusEl = document.getElementById('pulls-status');
+/** Under the card: what is worth knowing about the settings as they stand. */
+const notes = document.getElementById('pulls-notes');
 
 let statusTimer = null;
 let busy = false;
@@ -77,7 +80,7 @@ function switchRow(spec, state) {
   toggle.addEventListener('click', () =>
     guard(toggle, async () => {
       const result = await ask({ type: 'gitchop:pulls:settings', patch: { [spec.id]: on ? 0 : 1 } });
-      flash(on ? 'off' : 'on');
+      flash('saved');
       current = result;
       render(result);
     }),
@@ -89,36 +92,27 @@ function switchRow(spec, state) {
 
 function render(state, error) {
   host.textContent = '';
+  notes.textContent = '';
   const wrap = element('div', 'card-body');
 
-  wrap.append(
-    element(
-      'p',
-      'note',
-      'A second column beside the menu: feedback on your pull requests — approved, or changes ' +
-        'requested — then the pull requests waiting on you for a review, then yours still waiting on ' +
-        'others. It paints the instant the menu opens and refreshes behind it; → or Tab crosses into ' +
-        'it, ← comes back, and typing anything comes straight back to the search.',
-    ),
-  );
-
   if (!state?.hasToken) {
-    wrap.append(
+    notes.append(
       element(
         'p',
         'note',
-        'It needs a token that can read pull requests: the classic token above with repo does, and so ' +
-          'does a fine-grained one with Pull requests: read-only for each owner. Without one there is ' +
-          'no column — the menu is exactly what it was.',
+        'A classic token with repo, or a fine-grained one with Pull requests: read-only per owner. ' +
+          'Without one there is no column.',
       ),
     );
-    host.append(wrap);
+    host.append(tokenGate());
     return;
   }
 
+  // The column's own switch is under Panels with the other columns'; the rest of its settings are here.
   const switches = element('div', 'sliders');
-  for (const spec of SWITCHES) switches.append(switchRow(spec, state));
+  for (const spec of SWITCHES.filter((spec) => spec.id !== 'enabled')) switches.append(switchRow(spec, state));
   wrap.append(switches);
+  if (state.settings.enabled !== 1) notes.append(element('p', 'note', 'The column is switched off under Panels.'));
 
   const lanes = state.lanes ?? [];
   if (state.settings.enabled === 1 && lanes.some((lane) => lane.pulls !== null)) {
@@ -132,13 +126,11 @@ function render(state, error) {
   else if (state.partial) wrap.append(element('p', 'error', `One token did not answer: ${state.partial}`));
 
   if (state.settings.enabled === 1) {
-    wrap.append(
+    notes.append(
       element(
         'p',
         'note',
-        'A fine-grained token that was never granted Pull requests shows empty lanes rather than an ' +
-          'error — GitHub returns less, not a refusal. If the lanes stay empty while github.com/pulls ' +
-          'does not, that is why.',
+        'A fine-grained token without Pull requests: read-only shows empty lanes rather than an error.',
       ),
     );
 

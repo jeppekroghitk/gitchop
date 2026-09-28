@@ -22,6 +22,29 @@ export const DEFAULT_LINKS = [
   { icon: '🌿', label: 'This branch: Commits', url: 'https://github.com/{repoFull}/commits/{branch}' },
 ];
 
+export const PANEL_KEY = 'panel';
+
+/** The one switch for the panel itself — the links and the search — on the Panels page in Settings. */
+export const PANEL_SWITCHES = [
+  {
+    id: 'enabled',
+    label: 'Links',
+    value: 1,
+    hint: 'Off leaves the menu without the links and the search: only the columns you have on rise into the cut. The toolbar icon still opens Settings.',
+  },
+];
+
+/** Storage is shared state: whatever shape comes back, the switch ends up on or off. */
+export function sanitizePanel(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const settings = {};
+  for (const { id, value } of PANEL_SWITCHES) {
+    const number = Number(source[id]);
+    settings[id] = Number.isFinite(number) ? (number >= 1 ? 1 : 0) : value;
+  }
+  return settings;
+}
+
 export function newId() {
   return crypto.randomUUID();
 }

@@ -8,11 +8,8 @@
   <body>
     <main class="wrap">
       <header class="masthead">
-        <h1 class="wordmark">git<b>chop</b></h1>
-        <p class="tagline">
-          Press <kbd>.</kbd> anywhere on <span class="mono">github.com</span> to chop the page open.
-          These are the links it reveals.
-        </p>
+        <p class="wordmark">git<b>chop</b></p>
+        <h1 class="page-title">Settings</h1>
       </header>
 
       <section class="card card-warn" id="access-card" hidden>
@@ -22,89 +19,168 @@
         <div id="access"></div>
       </section>
 
-      <section class="card">
-        <div class="card-head">
-          <h2>Your links</h2>
-          <span class="status" id="status" role="status" aria-live="polite"></span>
-        </div>
+      <!--
+        One page at a time, chosen from the rail; the rest stay in the document, hidden, since every
+        card's module finds its elements when it loads. Each page is three parts: what the feature is,
+        above the box; the settings themselves, in it; and what is worth knowing about them as they
+        stand, below it, where the card's module writes its notes. The rail is buttons rather than
+        anchors: the harness loads this page into a frame under a <base>, where a #hash link would
+        navigate the frame away.
+      -->
+      <div class="pages">
+        <nav class="rail" aria-label="Settings pages" data-default="links">
+          <span class="rail-group">General</span>
+          <button type="button" class="rail-item" data-page="features">Panels</button>
+          <button type="button" class="rail-item" data-page="effects">The chop</button>
+          <span class="rail-group">Menu</span>
+          <button type="button" class="rail-item" data-page="links">Links</button>
+          <button type="button" class="rail-item" data-page="pulls" data-needs-token>Pull requests</button>
+          <button type="button" class="rail-item" data-page="news">News</button>
+          <span class="rail-group">GitHub</span>
+          <button type="button" class="rail-item" data-page="token">Tokens</button>
+          <button type="button" class="rail-item" data-page="index" data-needs-token>Index</button>
+          <button type="button" class="rail-item" data-page="backup" data-needs-token>Backup</button>
+        </nav>
 
-        <div class="rows" id="rows"></div>
+        <div class="page">
+          <div class="pane" data-page="features" hidden>
+            <header class="pane-head">
+              <h2 class="pane-title">Panels</h2>
+              <span class="status" id="features-status" role="status" aria-live="polite"></span>
+            </header>
+            <p class="intro">
+              What rises when you press the dot: the links and the search, the pull requests column,
+              the news column, and the contributions count. The first three have pages of their own
+              under Menu.
+            </p>
+            <section class="card">
+              <div id="features"></div>
+            </section>
+            <div class="notes" id="features-notes"></div>
+          </div>
 
-        <div class="card-foot">
-          <button type="button" class="btn btn-primary" id="add">+ Add link</button>
-          <button type="button" class="btn" id="reset">Restore defaults</button>
-        </div>
-      </section>
+          <div class="pane" data-page="links" hidden>
+            <header class="pane-head">
+              <h2 class="pane-title">Links</h2>
+              <span class="status" id="status" role="status" aria-live="polite"></span>
+            </header>
+            <p class="intro">
+              The links the menu shows, top to bottom.
+            </p>
+            <section class="card">
+              <div class="rows" id="rows"></div>
 
-      <section class="card">
-        <div class="card-head">
-          <h2>Chop effect</h2>
-          <span class="status" id="effects-status" role="status" aria-live="polite"></span>
-        </div>
-        <div id="effects"></div>
-      </section>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary" id="add">+ Add link</button>
+                <button type="button" class="btn" id="reset">Restore defaults</button>
+              </div>
+            </section>
+            <div class="notes" id="links-notes">
+              <p class="note">
+                Any of these in a link’s URL is filled in from the page you are on. A link that cannot be
+                filled in is greyed out in the menu.
+              </p>
+              <dl class="tokens" id="tokens"></dl>
+            </div>
+          </div>
 
-      <section class="card">
-        <div class="card-head">
-          <h2>GitHub token</h2>
-          <span class="status" id="sync-status" role="status" aria-live="polite"></span>
-        </div>
-        <div id="sync"></div>
-      </section>
+          <div class="pane" data-page="effects" hidden>
+            <header class="pane-head">
+              <h2 class="pane-title">The chop</h2>
+              <span class="status" id="effects-status" role="status" aria-live="polite"></span>
+            </header>
+            <p class="intro">
+              How the page is chopped open when you press the dot. Changes save on their own; Preview
+              plays them here.
+            </p>
+            <section class="card">
+              <div id="effects"></div>
+            </section>
+            <div class="notes" id="effects-notes"></div>
+          </div>
 
-      <section class="card">
-        <div class="card-head">
-          <h2>Private repository search</h2>
-          <span class="status" id="index-status" role="status" aria-live="polite"></span>
-        </div>
-        <div id="index"></div>
-      </section>
+          <div class="pane" data-page="token" hidden>
+            <header class="pane-head">
+              <h2 class="pane-title">Tokens</h2>
+              <span class="status" id="sync-status" role="status" aria-live="polite"></span>
+            </header>
+            <p class="intro">
+              A token unlocks private repository search, the pull requests, news from private
+              repositories, your contributions, and backing your links up to a secret gist.
+            </p>
+            <section class="card">
+              <div id="sync"></div>
+            </section>
+            <div class="notes" id="token-notes"></div>
+          </div>
 
-      <section class="card">
-        <div class="card-head">
-          <h2>Pull requests</h2>
-          <span class="status" id="pulls-status" role="status" aria-live="polite"></span>
-        </div>
-        <div id="pulls"></div>
-      </section>
+          <div class="pane" data-page="index" hidden>
+            <header class="pane-head">
+              <h2 class="pane-title">Index</h2>
+              <span class="status" id="index-status" role="status" aria-live="polite"></span>
+            </header>
+            <p class="intro">
+              GitHub’s search does not return private repositories, so gitchop keeps its own list of
+              the repositories your token can reach, on this machine only, and matches that first.
+            </p>
+            <section class="card">
+              <div id="index"></div>
+            </section>
+            <div class="notes" id="index-notes"></div>
+          </div>
 
-      <section class="card">
-        <div class="card-head">
-          <h2>News</h2>
-          <span class="status" id="news-status" role="status" aria-live="polite"></span>
-        </div>
-        <div id="news"></div>
-      </section>
+          <div class="pane" data-page="backup" hidden>
+            <header class="pane-head">
+              <h2 class="pane-title">Backup</h2>
+              <span class="status" id="backup-status" role="status" aria-live="polite"></span>
+            </header>
+            <p class="intro">
+              Your links live in this browser’s profile and go with the extension if it is removed.
+              Backup writes them to a secret gist on every change.
+            </p>
+            <section class="card">
+              <div id="backup"></div>
+            </section>
+            <div class="notes" id="backup-notes"></div>
+          </div>
 
-      <section class="card">
-        <div class="card-head">
-          <h2>Contributions</h2>
-          <span class="status" id="contributions-status" role="status" aria-live="polite"></span>
-        </div>
-        <div id="contributions"></div>
-      </section>
+          <div class="pane" data-page="pulls" hidden>
+            <header class="pane-head">
+              <h2 class="pane-title">Pull requests</h2>
+              <span class="status" id="pulls-status" role="status" aria-live="polite"></span>
+            </header>
+            <p class="intro">
+              A column beside the menu: feedback on your pull requests, the ones waiting on your
+              review, and yours waiting on others.
+            </p>
+            <section class="card">
+              <div id="pulls"></div>
+            </section>
+            <div class="notes" id="pulls-notes"></div>
+          </div>
 
-      <section class="card">
-        <div class="card-head">
-          <h2>Backup</h2>
-          <span class="status" id="backup-status" role="status" aria-live="polite"></span>
+          <div class="pane" data-page="news" hidden>
+            <header class="pane-head">
+              <h2 class="pane-title">News</h2>
+              <span class="status" id="news-status" role="status" aria-live="polite"></span>
+            </header>
+            <p class="intro">
+              A column on the far side of the menu with what happened in the repositories you follow,
+              a few sentences each. It is made up once a day at the hour set here and covers
+              everything since the previous edition.
+            </p>
+            <section class="card">
+              <div id="news"></div>
+            </section>
+            <div class="notes" id="news-notes"></div>
+          </div>
         </div>
-        <div id="backup"></div>
-      </section>
-
-      <section class="card">
-        <div class="card-head">
-          <h2>Placeholders</h2>
-        </div>
-        <p class="note">
-          Any of these in a URL is replaced with something from the page you are on. A link whose
-          placeholders cannot be filled is shown greyed out in the menu.
-        </p>
-        <dl class="tokens" id="tokens"></dl>
-      </section>
+      </div>
 
       <footer class="footer">
         <span id="version" class="mono"></span>
+        <a class="link" href="https://github.com/jeppekroghitk/gitchop/blob/main/PRIVACY.md" target="_blank" rel="noreferrer">Privacy</a>
+        <a class="link" href="https://github.com/jeppekroghitk/gitchop" target="_blank" rel="noreferrer">Source</a>
       </footer>
     </main>
 

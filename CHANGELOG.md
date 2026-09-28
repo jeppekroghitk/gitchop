@@ -12,35 +12,35 @@ it from.
   The classic token is warned against in a red box instead of being offered as the simplest, since
   its repo scope is write everywhere the account reaches; a saved classic token gets the same box in
   place of the old note, telling you to replace and revoke it. The account of how tokens are stored
-  folds away under a heading. The recipe stays at the top once tokens are saved, and the saved tokens
-  are listed beneath it, so what is pasted appears right below where it was pasted and the card does
-  not reshuffle when the first token lands; a second organisation is the same three steps again.
-- Backup has a card of its own in Settings, the last before the placeholders, with its own status
-  corner. It used to share
-  the token card, so the gist field and its buttons ran on from the token rows. Without a token the
-  card says what backup would take; with one, the gist field and the switch; connected, the gist and
-  the last pull and push, with the pull, push and stop. A failure shows on the card whose button
-  caused it, and the background's own last error, which is always the gist's, shows on the backup
-  card. The token card is tokens only.
+  folds away under a heading. The recipe stays at the top once tokens are saved, and the saved
+  tokens are listed beneath it, so what is pasted appears right below where it was pasted and the
+  card does not reshuffle when the first token lands; a second organisation is the same three steps
+  again.
+- Backup has a card of its own in Settings, its own page under GitHub, with its own status corner.
+  It used to share the token card, so the gist field and its buttons ran on from the token rows.
+  Without a token the card says what backup would take; with one, the gist field and the switch;
+  connected, the gist and the last pull and push, with the pull, push and stop. A failure shows on
+  the card whose button caused it, and the background's own last error, which is always the gist's,
+  shows on the backup card. The token card is tokens only.
 - The fine-grained token link in Settings now opens GitHub's form with the grants ticked — Pull
   requests, Issues and Contents read-only, and Gists for the backup when the token is the account's
   own — so only the repositories are left to choose. The owner is named in a field beside the link
   and travels with it, because GitHub clears every tick the moment the owner is changed on the form
   itself. The same recipe stays at the top of the card once a token is in place, which is where the
-  second organisation's token is made. Metadata read-only alone was enough for the index but left the pull
-  request lanes empty and the news from a private repository failing, and the form gave no hint of
-  which of the forty-odd permissions gitchop actually reads.
+  second organisation's token is made. Metadata read-only alone was enough for the index but left
+  the pull request lanes empty and the news from a private repository failing, and the form gave no
+  hint of which of the forty-odd permissions gitchop actually reads.
 - A saved fine-grained token is listed under the owner it reaches, read off the private repositories
-  it lists, rather than under the login of whoever made it — which is the same login on every one, so
-  three organisations' tokens read as three identical rows. Public repositories are left out of that
-  reading because they say nothing: every token can list them, whoever it was made for, and a token
-  awaiting an organisation's approval lists the public half of every organisation the account belongs
-  to and nothing else. Such a token's row says it reaches no private repositories yet, and the index
-  card now says the same — its earlier claim that an unapproved organisation would be missing from
-  the account list was wrong, since the organisation shows up with its public repositories and only
-  the private count gives it away. Classic tokens keep the login: they are the account's and cover
-  everything it can reach. Tokens saved before this learn their owner the next time the index is
-  built.
+  it lists, rather than under the login of whoever made it — which is the same login on every one,
+  so three organisations' tokens read as three identical rows. Public repositories are left out of
+  that reading because they say nothing: every token can list them, whoever it was made for, and a
+  token awaiting an organisation's approval lists the public half of every organisation the account
+  belongs to and nothing else. Such a token's row says it reaches no private repositories yet, and
+  the index card now says the same — its earlier claim that an unapproved organisation would be
+  missing from the account list was wrong, since the organisation shows up with its public
+  repositories and only the private count gives it away. Classic tokens keep the login: they are the
+  account's and cover everything it can reach. Tokens saved before this learn their owner the next
+  time the index is built.
 - **Your contributions this year, in the head of the menu.** With a token saved, the number your
   profile prints for the year — *1234 contributions in 2026* — sits beside the title, spun in like a
   slot machine's: every reel sets off the moment the panel is up and they stop one at a time, left
@@ -56,9 +56,26 @@ it from.
   before under its own alias, so a year GitHub refuses is a year left out rather than a failed
   answer — and the highest count for this year wins, its past years with it, since a fine-grained
   token sees fewer repositories than a classic one and may count fewer. Years before the account
-  existed are left out rather than shown as nought. A **Contributions** card in Settings has the
-  switch, the numbers, when they were refreshed, and a **Refresh now**. Removing the last token
-  deletes the snapshot with the rest. (#7)
+  existed are left out rather than shown as nought. A switch under Panels in Settings turns it off.
+  Removing the last token deletes the snapshot with the rest. (#7)
+- **The settings page is paged.** Eight cards in one column had become a long scroll, so a rail on
+  the left now names every page under three headings — General: Panels, one switch each for the
+  links panel, the pull requests column, the news column and the contributions count, with room for
+  more; The chop. The links panel — the links and the search — can be switched off too: the menu is
+  then only the columns you have on, the news alone if that is all you want, and with nothing else
+  on the panel stays. Menu: Links, with the placeholders under the links; Pull requests; News.
+  GitHub: Tokens, Index, Backup — and one page stands on the right at a time, Links to begin with.
+  The page remembers the card it was left on, in the address and for the next visit; up and down
+  walk the rail. A narrow window puts the rail above the card as a row instead. Each page has its
+  own headline, with the status corner beside it, and a line under it saying what the feature is;
+  then the box, with the settings themselves and nothing else, not even a title bar; then, below it,
+  what is worth knowing about them as they stand — so only controls sit inside a border. Every note
+  is shorter, the token card's list of every call made with a token is a link to the privacy notes
+  that carry it, and the notes that pointed at a card "above" or "below" now name its page. The
+  pages that can do nothing without a token — Pull requests, Index, Backup — are dimmed on the rail
+  until one is saved, and each shows one line saying so with the way to the Token page in place of
+  controls that could only fail. Every card stays in the document, only hidden, so nothing about how
+  they load or save has changed. (#3)
 
 ## 2.5.0
 
