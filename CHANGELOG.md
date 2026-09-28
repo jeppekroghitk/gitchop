@@ -3,7 +3,7 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
-## Unreleased
+## 2.6.0
 
 - The token card in Settings is a recipe rather than an essay. The fine-grained token comes first,
   marked recommended, in three numbered steps: name the owner, open GitHub's form for it, paste what
