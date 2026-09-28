@@ -3,7 +3,7 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
-## Unreleased
+## 2.7.0
 
 - **The gist backs up the settings, not the links alone.** Everything that lives in synced storage
   now goes to the gist with the links: the repositories you subscribe to for news and the edition
