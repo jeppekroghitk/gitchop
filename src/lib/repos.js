@@ -1,5 +1,12 @@
 const API = 'https://api.github.com';
 const SLASHED = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
+
+/**
+ * How many repositories a search lists. It is the page each search asks for, not a count of
+ * requests: a bare word is two searches whatever the number, an owner/repository one lookup, and
+ * the index none — so ten costs GitHub nothing more than five did. The menu's slots match it.
+ */
+export const REPO_LIMIT = 10;
 const OWNER_IN_URL = /^https?:\/\/(?:www\.)?github\.com\/([A-Za-z0-9._-]+)/i;
 
 /** First path segments on github.com that are features, not accounts. */
@@ -118,7 +125,7 @@ export async function ownersReachable(token) {
 }
 
 /** Exact name, then prefix, then substring; shorter names win ties. */
-export function matchIndex(index, query, limit = 5) {
+export function matchIndex(index, query, limit = REPO_LIMIT) {
   const needle = String(query ?? '').trim().toLowerCase();
   if (needle.length < 2) return [];
 
@@ -161,7 +168,7 @@ function merge(groups, limit) {
  * Searching "economics" while itk-dev is in the links should not bury itk-dev/economics under
  * every other project of that name.
  */
-export async function findRepos(query, token, owners = [], limit = 5) {
+export async function findRepos(query, token, owners = [], limit = REPO_LIMIT) {
   const trimmed = String(query ?? '')
     .trim()
     .replace(/^https?:\/\/(www\.)?github\.com\//i, '')
@@ -179,7 +186,7 @@ export async function findRepos(query, token, owners = [], limit = 5) {
 
   const scope = owners.map((owner) => `user:${owner}`).join(' ');
   const [scoped, general] = await Promise.allSettled([
-    scope ? search(`${trimmed} in:name ${scope}`, token, 3, true) : Promise.resolve([]),
+    scope ? search(`${trimmed} in:name ${scope}`, token, Math.ceil(limit / 2), true) : Promise.resolve([]),
     search(trimmed, token, limit),
   ]);
 

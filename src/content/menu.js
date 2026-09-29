@@ -18,7 +18,8 @@ window.__gitchop = window.__gitchop || {};
    * The repository area is always exactly this many rows tall while a search is on, filled with
    * skeletons or blanks, so the panel does not resize when results land under the cursor.
    */
-  const REPO_SLOTS = 5;
+  /** Rows under Repositories, and the skeletons standing in for them: the same ten the background asks for (REPO_LIMIT in repos.js). */
+  const REPO_SLOTS = 10;
   const GHOST_WIDTHS = ['62%', '47%', '71%', '54%', '43%'];
 
   /** Where you can land inside a repository, likeliest first. */
@@ -49,6 +50,33 @@ window.__gitchop = window.__gitchop || {};
   const POP_BRIDGE = 6;
   /** How long a popover outlives the mouse leaving its chip — long enough to reach it diagonally. */
   const POP_LINGER = 120;
+
+  /**
+   * The rows under Repositories: the index's matches, then GitHub's, without repeats — and an
+   * exact owner/repository, from either, first of all. Typing leantime/leantime must land on
+   * Leantime/leantime even when the index holds five other leantime things whose names contain
+   * the words; the index is favoured, but not over the one repository that was named outright.
+   * A github.com address pasted whole counts as its owner/repository.
+   */
+  function orderRepos(query, local, remote, limit) {
+    const wanted = String(query ?? '')
+      .trim()
+      .replace(/^https?:\/\/(www\.)?github\.com\//i, '')
+      .replace(/\/+$/, '')
+      .toLowerCase();
+    const seen = new Set();
+    const merged = [];
+    for (const repo of [...(local ?? []), ...(remote ?? [])]) {
+      const key = String(repo?.fullName ?? '').toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(repo);
+    }
+    const exact = merged.findIndex((repo) => repo.fullName.toLowerCase() === wanted);
+    if (exact > 0) merged.unshift(...merged.splice(exact, 1));
+    return merged.slice(0, limit);
+  }
+  gc.orderRepos = orderRepos;
 
   gc.createMenu = function createMenu({ ctx, links, pulls, news, contributions, panel: panelSetting, onClose, onOptions, onLinksChanged }) {
     /**
@@ -663,11 +691,8 @@ window.__gitchop = window.__gitchop || {};
         list.append(section('Repositories'));
 
         const local = mine.query === query ? mine.results : [];
-        const seen = new Set(local.map((repo) => repo.fullName.toLowerCase()));
-        const remote = (repos.query === query ? repos.results : []).filter(
-          (repo) => !seen.has(repo.fullName.toLowerCase()),
-        );
-        const results = [...local, ...remote].slice(0, REPO_SLOTS);
+        const remote = repos.query === query ? repos.results : [];
+        const results = orderRepos(query, local, remote, REPO_SLOTS);
         const pending = query.length >= SEARCH_AFTER && repos.query !== query;
 
         for (const repo of results) addItem(repoEntry(repo));
