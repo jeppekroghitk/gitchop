@@ -237,6 +237,27 @@ window.__gitchop.CSS = `
   outline: none;
 }
 
+.gc-stage[data-panel="false"] [data-strip="true"] .gc-lanes {
+  flex: 0 0 auto;
+  height: calc(min(48vh, 344px) + 48px);
+}
+
+.gc-tool {
+  margin-left: auto;
+  border: 0;
+  padding: 0;
+  background: none;
+  font: 400 10.5px/1 var(--gc-mono);
+  color: var(--gc-dim);
+  cursor: pointer;
+}
+
+.gc-tool:hover,
+.gc-tool:focus-visible {
+  color: var(--gc-text);
+  outline: none;
+}
+
 /* In a column's head the count sits by the title; the news keeps its own right-hand fact. */
 .gc-news .gc-count {
   margin-left: 0;

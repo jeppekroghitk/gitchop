@@ -3,6 +3,19 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
+## Unreleased
+
+- A column standing without the links panel has a height of its own. The pull requests and the
+  news took their height from the panel beside them, so with the panel switched off the list under
+  a column's head collapsed to nothing and the column was its header alone, whatever the edition
+  held. Alone, the lists are now as tall as they are beside a panel, and scroll as they did.
+- Settings can be reached without the links panel. The Settings row lives in the links, so with the
+  panel off the menu had no way there but the toolbar icon. The column standing nearest where the
+  panel would be — the pull requests, or the news alone — now ends in a strip like the panel's
+  own, with a *settings* word in it where the panel keeps its keys, and clicking it opens Settings
+  as the row does. Two columns standing together share the one strip, as they would have shared the
+  panel, and keep the height they have beside one.
+
 ## 2.8.0
 
 - The contributions count settles sooner. The reels still set off together and stop one at a time,

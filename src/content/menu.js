@@ -198,6 +198,28 @@ window.__gitchop = window.__gitchop || {};
       count.home?.append(count.pop);
     }
 
+    /**
+     * Settings is a row in the links list, so without the panel there would be no way to it from
+     * the menu. The column standing nearest where the panel would be — the same one the count
+     * moves to — then ends in a strip like the panel's own, with the word in it where the panel
+     * keeps its keys, and clicking it goes where the row went. One strip, not one per column: two
+     * columns standing together share the one, as they would have shared the panel. That column
+     * also sets the height, since without a panel nothing else does; the other stretches to it.
+     * The head is left alone: with the count and the news' own fact already in it, a third thing
+     * cut the fact short.
+     */
+    if (!hasPanel) {
+      const host = pullsEl ?? newsEl;
+      const tool = node('button', 'gc-tool', 'settings');
+      tool.type = 'button';
+      tool.title = 'Open Settings';
+      tool.addEventListener('click', () => onOptions());
+      const strip = node('div', 'gc-foot');
+      strip.append(tool);
+      host.append(strip);
+      host.dataset.strip = 'true';
+    }
+
     // The full title of a pull request whose row had to cut it short, shown the instant the row is
     // hovered or becomes the cursor. One element for the whole column, moved to whichever row.
     // Shown and hidden by an attribute rather than `hidden`, so it can fade and rise into place.
