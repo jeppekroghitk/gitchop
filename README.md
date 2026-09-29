@@ -71,7 +71,9 @@ leantime things. Up to ten repositories are listed, and the list scrolls.
 
 The panel itself — the links and the search — has a switch under Panels in Settings. Off, the menu
 is only the columns you have on: the news alone, if that is all you want. With nothing else on the
-panel stays, and the toolbar icon opens Settings either way.
+panel stays. Without it, the column nearest where the panel would be — the pull requests, or the
+news alone — ends in a strip with a *settings* word that opens Settings, since the row that did so
+sits in the links; the toolbar icon opens Settings either way.
 
 ## Private repositories
 
