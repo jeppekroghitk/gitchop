@@ -660,7 +660,12 @@ async function withRepoToken(tokens, preferredId, run) {
  * A repository that fails keeps whatever it had and records the sentence.
  */
 function refreshNews({ force = false } = {}) {
-  if (newsRefresh) return newsRefresh;
+  // One under way works from the settings it started with: a repository subscribed since, or a
+  // span changed since, is not in it. An ask that finds one running therefore waits for it and
+  // asks again — a look at what is still stale when nothing changed, a second round when it did —
+  // and hands back that second answer, which is what is on file now. Joining the running one
+  // instead left the menu on skeletons until its next open.
+  if (newsRefresh) return newsRefresh.then(() => refreshNews({ force }));
   newsRefresh = (async () => {
     const settings = await readNewsSettings();
     const previous = await readNewsCache();

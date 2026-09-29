@@ -9,6 +9,14 @@ it from.
   left to right, but each stops 400 ms after the one before rather than 600, so a four-digit count
   is still in about a second and a third instead of two. They turn at the same readable pace as
   before; a reel that stops sooner simply has time for fewer whole turns on the way.
+- A news edition asked for while one was being made up no longer goes missing. The refresh
+  under way worked from the settings it had started with, and every request that arrived while
+  it ran simply joined it — so a second repository subscribed right after the first, or a span
+  changed while the first edition was still being fetched, was not in the edition that landed,
+  and a menu opened then stood on skeletons until its next open. That stood out most with the
+  links panel and the pull requests off, where the column was the whole of the menu. A request
+  that finds a refresh running now waits for it and asks again, which is a glance at what is
+  still stale when nothing changed and a second round when something did.
 
 ## 2.7.0
 
