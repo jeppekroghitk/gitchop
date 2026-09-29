@@ -3,6 +3,13 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
+## Unreleased
+
+- The contributions count settles sooner. The reels still set off together and stop one at a time,
+  left to right, but each stops 400 ms after the one before rather than 600, so a four-digit count
+  is still in about a second and a third instead of two. They turn at the same readable pace as
+  before; a reel that stops sooner simply has time for fewer whole turns on the way.
+
 ## 2.7.0
 
 - **The gist backs up the settings, not the links alone.** Everything that lives in synced storage

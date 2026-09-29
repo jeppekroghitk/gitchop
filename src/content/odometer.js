@@ -9,7 +9,7 @@ window.__gitchop = window.__gitchop || {};
   /** The leftmost reel lands this soon after the panel is up — as good as at once. */
   const FIRST = 150;
   /** Each reel to the right lands this long after the one before it. */
-  const GAP = 600;
+  const GAP = 400;
   /** How long a digit takes to tick on when a number already showing changes. */
   const TICK = 600;
   /** How fast a reel turns while it spins, in digits a second: slow enough to read them going past. */
