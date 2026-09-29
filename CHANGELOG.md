@@ -17,6 +17,15 @@ it from.
   links panel and the pull requests off, where the column was the whole of the menu. A request
   that finds a refresh running now waits for it and asks again, which is a glance at what is
   still stale when nothing changed and a second round when something did.
+- The news column fills a repository at a time. The edition used to be written once every
+  subscribed repository had answered, so a menu opened while it was being made up showed
+  skeletons in every section until the last one landed — a wait of tens of seconds with a week's
+  span and a handful of busy repositories. Now each repository is written the moment it is in,
+  and a menu that is up paints its section then; the settings page follows the same way. What
+  has landed also survives the background being stopped mid-way, which Firefox does to an idle
+  event page after half a minute while a request is still waiting, so the next refresh asks only
+  for what is missing instead of starting over. Inside one edition the parts already on file stay
+  in the column until their replacements arrive, so Refresh now never blanks it.
 
 ## 2.7.0
 
