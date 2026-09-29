@@ -26,6 +26,15 @@ it from.
   event page after half a minute while a request is still waiting, so the next refresh asks only
   for what is missing instead of starting over. Inside one edition the parts already on file stay
   in the column until their replacements arrive, so Refresh now never blanks it.
+- Two fine-grained tokens that reach no private repository yet no longer read as two copies of
+  you. A token is listed under the owner it was made for, as named in the recipe, until the private
+  repositories it lists say otherwise — GitHub has no way of asking a token whom it was made for,
+  and one awaiting an organisation's approval lists nothing that tells. Every row also says when
+  the token expires, read off the header GitHub sends back with each request: the date, the days
+  left once there are two weeks or fewer, or that it already has, with a mark beside the name. A
+  token saved before this learns its expiry the next time the index is built; its owner is known
+  only from the recipe, so a row that needs the name is a matter of removing the token and pasting
+  it again with the owner filled in.
 
 ## 2.7.0
 

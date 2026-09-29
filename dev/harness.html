@@ -110,16 +110,27 @@
 
       // What the settings page asks the background that the menu never does: the tokens, the backup,
       // the private index. ?token=none starts with nothing saved — every card then says what a token
-      // would unlock — ?backup=on starts with the gist connected, ?index=empty with no index built and
+      // would unlock — ?token=fine with three fine-grained tokens in their three states,
+      // ?backup=on starts with the gist connected, ?index=empty with no index built and
       // ?index=public with one that found no private repositories.
       const now = () => new Date().toISOString();
       const wait = (ms) => new Promise((done) => setTimeout(done, ms));
+      const daysFromNow = (days) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
       const backup = params.get('backup') === 'on';
       const sync = {
+        // ?token=fine is the fine-grained picture: one that lists an organisation's private
+        // repositories, one made for an organisation that has yet to approve it — named for the
+        // owner from the recipe, since it lists nothing — and the account's own, run out.
         tokens:
           params.get('token') === 'none'
             ? []
-            : [{ id: 't1', secret: 'ghp_harness', login: 'jeppekrogh', kind: 'classic', scopes: ['repo', 'gist'], owners: ['jeppekrogh', 'itk-dev', 'os2display'] }],
+            : params.get('token') === 'fine'
+              ? [
+                  { id: 't1', secret: 'github_pat_h1', login: 'jeppekrogh', kind: 'fine-grained', scopes: [], owners: ['itk-dev'], target: 'itk-dev', expiresAt: daysFromNow(200) },
+                  { id: 't2', secret: 'github_pat_h2', login: 'jeppekrogh', kind: 'fine-grained', scopes: [], owners: [], target: 'os2display', expiresAt: daysFromNow(9) },
+                  { id: 't3', secret: 'github_pat_h3', login: 'jeppekrogh', kind: 'fine-grained', scopes: [], owners: [], target: null, expiresAt: daysFromNow(-3) },
+                ]
+              : [{ id: 't1', secret: 'ghp_harness', login: 'jeppekrogh', kind: 'classic', scopes: ['repo', 'gist'], owners: ['jeppekrogh', 'itk-dev', 'os2display'], target: null, expiresAt: daysFromNow(300) }],
         gistId: backup ? 'c0ffee5eed1234567890abcdef' : null,
         lastPulledAt: backup ? '2026-09-17T06:00:00.000Z' : null,
         lastPushedAt: backup ? '2026-09-17T07:12:00.000Z' : null,
@@ -130,7 +141,7 @@
         const hasToken = sync.tokens.length > 0;
         return {
           ok: true,
-          tokens: sync.tokens.map(({ id, login, kind, scopes, owners }) => ({ id, login, kind, scopes, owners, broad: scopes.includes('repo') })),
+          tokens: sync.tokens.map(({ id, login, kind, scopes, owners, target, expiresAt }) => ({ id, login, kind, scopes, owners, target: target ?? null, expiresAt: expiresAt ?? null, broad: scopes.includes('repo') })),
           hasToken,
           connected: hasToken && Boolean(sync.gistId),
           gistId: sync.gistId,
@@ -172,6 +183,9 @@
               kind: fine ? 'fine-grained' : classic ? 'classic' : null,
               scopes: classic ? ['repo'] : [],
               owners: fine ? (fineBefore === 0 ? ['itk-dev'] : []) : classic ? ['someone', 'itk-dev'] : null,
+              // The owner named in the recipe, and an expiry a year out — as the background reads them.
+              target: String(message.owner ?? '').trim() || null,
+              expiresAt: fine || classic ? '2027-09-17T12:00:00.000Z' : null,
             });
             return syncState();
           }

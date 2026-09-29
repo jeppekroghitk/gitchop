@@ -189,7 +189,9 @@ function fineSteps({ placeholder, saveLabel, primary }) {
         flash('not allowed');
         return;
       }
-      const result = await ask({ type: 'gitchop:token:save', token: token.value });
+      // The owner named in the first step travels with the token: it is what the row is called
+      // until the token lists a private repository that says otherwise.
+      const result = await ask({ type: 'gitchop:token:save', token: token.value, owner: ownerName(owner.value) });
       flash('saved');
       current = result;
       render(result);
@@ -290,11 +292,34 @@ function noToken(error) {
  */
 function tokenDetail(entry) {
   const kind = entry.kind ?? 'token';
-  if (entry.scopes.length > 0) return `${kind} — ${entry.scopes.join(', ')}`;
-  if (entry.kind !== 'classic' && Array.isArray(entry.owners) && entry.owners.length === 0) {
-    return `${kind} — reaches no private repositories yet`;
+  let detail = entry.kind ?? 'saved';
+  if (entry.scopes.length > 0) detail = `${kind} — ${entry.scopes.join(', ')}`;
+  else if (entry.kind !== 'classic' && Array.isArray(entry.owners) && entry.owners.length === 0) {
+    detail = `${kind} — reaches no private repositories yet`;
   }
-  return entry.kind ?? 'saved';
+  const ends = expiry(entry.expiresAt);
+  return ends ? `${detail} · ${ends}` : detail;
+}
+
+/** Whether a saved token has run out: an expired one can read nothing, and its row should say so first. */
+function isExpired(entry) {
+  const at = Date.parse(entry?.expiresAt ?? '');
+  return !Number.isNaN(at) && at <= Date.now();
+}
+
+/**
+ * When the token runs out, as GitHub told us: the date, or the days left once it is close enough
+ * to act on, or that it already has. Nothing for a token without an expiry, or one saved before
+ * the expiry was read — building the index reads it then.
+ */
+function expiry(iso) {
+  const at = Date.parse(iso ?? '');
+  if (Number.isNaN(at)) return '';
+  const left = at - Date.now();
+  if (left <= 0) return 'expired';
+  const days = Math.ceil(left / (24 * 60 * 60 * 1000));
+  if (days <= 14) return `expires in ${days} day${days === 1 ? '' : 's'}`;
+  return `expires ${new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
 }
 
 function tokenList(sync) {
@@ -305,6 +330,7 @@ function tokenList(sync) {
     const label = element('div', 'token-name');
     label.append(element('b', null, tokenLabel(entry)), element('span', 'token-detail', tokenDetail(entry)));
     if (entry.broad) label.append(element('span', 'token-warn', 'writes'));
+    if (isExpired(entry)) label.append(element('span', 'token-warn', 'expired'));
 
     const drop = button('Remove');
     drop.addEventListener('click', () =>

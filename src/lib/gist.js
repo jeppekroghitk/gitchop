@@ -76,12 +76,28 @@ export function scopesGrantWrite(scopes) {
 /**
  * What a saved token is called. A classic token is the account's and covers everything it can reach,
  * so the account names it. A fine-grained token speaks for one owner, and every one the same person
- * makes reports the same login, so the owner it reaches is what tells two of them apart.
+ * makes reports the same login, so the owner it reaches is what tells two of them apart — read off
+ * the private repositories it lists, or, until it lists any, the owner it was made for as named in
+ * the recipe. Two tokens that reach nothing yet would otherwise read as two copies of you.
  */
 export function tokenLabel(entry) {
   const owners = entry?.kind === 'classic' ? [] : entry?.owners ?? [];
   if (owners.length > 0) return owners.map((owner) => `@${owner}`).join(', ');
+  if (entry?.kind !== 'classic' && entry?.target) return `@${entry.target}`;
   return entry?.login ? `@${entry.login}` : entry?.kind ?? 'token';
+}
+
+/**
+ * When a token runs out, from the header GitHub sends with every request made with a token that
+ * has an expiry — `2026-12-31 12:00:00 UTC` — as an ISO stamp. Null is a header missing or
+ * unreadable, which is a token without one.
+ */
+export function parseExpiry(header) {
+  const text = String(header ?? '').trim();
+  if (!text) return null;
+  const match = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) UTC$/.exec(text);
+  const at = Date.parse(match ? `${match[1]}T${match[2]}Z` : text);
+  return Number.isNaN(at) ? null : new Date(at).toISOString();
 }
 
 /**
@@ -102,7 +118,12 @@ export async function identify(token) {
   const user = await response.json();
   const header = response.headers.get('x-oauth-scopes');
   const scopes = header ? header.split(',').map((scope) => scope.trim()).filter(Boolean) : [];
-  return { login: user.login, scopes, kind: header === null ? tokenKind(token) : 'classic' };
+  return {
+    login: user.login,
+    scopes,
+    kind: header === null ? tokenKind(token) : 'classic',
+    expiresAt: parseExpiry(response.headers.get('github-authentication-token-expiration')),
+  };
 }
 
 export async function createStore(token, backup) {

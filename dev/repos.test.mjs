@@ -87,6 +87,10 @@ assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: ['itk-dev']
 assert.equal(tokenLabel({ login: 'me', kind: 'classic', owners: ['me', 'itk-dev'] }), '@me', 'a classic token is the account’s whatever it reaches');
 assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: [] }), '@me', 'reaching nothing falls back to who made it');
 assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: null }), '@me', 'so does not knowing');
+assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: [], target: 'itk-dev' }), '@itk-dev', 'reaching nothing yet, it is named for the owner it was made for');
+assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: null, target: 'itk-dev' }), '@itk-dev');
+assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: ['os2display'], target: 'itk-dev' }), '@os2display', 'what it reaches beats what it was made for');
+assert.equal(tokenLabel({ login: 'me', kind: 'classic', owners: [], target: 'itk-dev' }), '@me', 'a classic token is the account’s, whatever the recipe said');
 assert.equal(tokenLabel({ login: null, kind: 'fine-grained', owners: null }), 'fine-grained');
 assert.equal(tokenLabel({ login: null, kind: null }), 'token');
 
