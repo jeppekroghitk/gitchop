@@ -3,7 +3,7 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
-## Unreleased
+## 2.8.1
 
 - A column standing without the links panel has a height of its own. The pull requests and the
   news took their height from the panel beside them, so with the panel switched off the list under
