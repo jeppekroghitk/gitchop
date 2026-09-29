@@ -67,6 +67,17 @@ window.__gitchop = window.__gitchop || {};
       if (area !== 'sync' || !changes[gc.EFFECTS.KEY]) return;
       effects = gc.EFFECTS.sanitize(changes[gc.EFFECTS.KEY].newValue);
     });
+    // The background writes the news edition a repository at a time, under this key in local
+    // storage. A menu that is up repaints from the background's answer as each lands, so the
+    // column fills section by section instead of standing as skeletons until the last one is in.
+    api.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local' || !changes.newsCache || !state.open) return;
+      const { menu } = state;
+      if (!menu) return;
+      ask({ type: 'gitchop:news' }).then((news) => {
+        if (state.menu === menu && news?.ok) menu.updateNews(news);
+      });
+    });
   } catch {
     /* this tab keeps whatever it loaded with */
   }

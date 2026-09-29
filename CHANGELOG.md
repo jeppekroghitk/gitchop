@@ -3,6 +3,30 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
+## Unreleased
+
+- The contributions count settles sooner. The reels still set off together and stop one at a time,
+  left to right, but each stops 400 ms after the one before rather than 600, so a four-digit count
+  is still in about a second and a third instead of two. They turn at the same readable pace as
+  before; a reel that stops sooner simply has time for fewer whole turns on the way.
+- A news edition asked for while one was being made up no longer goes missing. The refresh
+  under way worked from the settings it had started with, and every request that arrived while
+  it ran simply joined it — so a second repository subscribed right after the first, or a span
+  changed while the first edition was still being fetched, was not in the edition that landed,
+  and a menu opened then stood on skeletons until its next open. That stood out most with the
+  links panel and the pull requests off, where the column was the whole of the menu. A request
+  that finds a refresh running now waits for it and asks again, which is a glance at what is
+  still stale when nothing changed and a second round when something did.
+- The news column fills a repository at a time. The edition used to be written once every
+  subscribed repository had answered, so a menu opened while it was being made up showed
+  skeletons in every section until the last one landed — a wait of tens of seconds with a week's
+  span and a handful of busy repositories. Now each repository is written the moment it is in,
+  and a menu that is up paints its section then; the settings page follows the same way. What
+  has landed also survives the background being stopped mid-way, which Firefox does to an idle
+  event page after half a minute while a request is still waiting, so the next refresh asks only
+  for what is missing instead of starting over. Inside one edition the parts already on file stay
+  in the column until their replacements arrive, so Refresh now never blanks it.
+
 ## 2.7.0
 
 - **The gist backs up the settings, not the links alone.** Everything that lives in synced storage

@@ -660,7 +660,12 @@ async function withRepoToken(tokens, preferredId, run) {
  * A repository that fails keeps whatever it had and records the sentence.
  */
 function refreshNews({ force = false } = {}) {
-  if (newsRefresh) return newsRefresh;
+  // One under way works from the settings it started with: a repository subscribed since, or a
+  // span changed since, is not in it. An ask that finds one running therefore waits for it and
+  // asks again — a look at what is still stale when nothing changed, a second round when it did —
+  // and hands back that second answer, which is what is on file now. Joining the running one
+  // instead left the menu on skeletons until its next open.
+  if (newsRefresh) return newsRefresh.then(() => refreshNews({ force }));
   newsRefresh = (async () => {
     const settings = await readNewsSettings();
     const previous = await readNewsCache();
@@ -676,6 +681,7 @@ function refreshNews({ force = false } = {}) {
     const sameEdition = previous?.until === window.until && previous?.since === window.since;
     const tokens = await loadTokens();
     const repos = {};
+    const edition = (parts) => ({ since: window.since, until: window.until, hour: settings.hour, days: settings.days, fetchedAt: now(), repos: parts });
     for (const repo of settings.repos) {
       const key = repo.toLowerCase();
       const before = previous?.repos?.[key] ?? null;
@@ -690,9 +696,16 @@ function refreshNews({ force = false } = {}) {
       } catch (error) {
         repos[key] = { ...(kept ?? emptyDigest(repo)), error: String(error.message ?? error), failedAt: now() };
       }
+      // Written as each repository lands, not once at the end. A menu that is up paints the
+      // section the moment it is in, instead of skeletons until the last one is; and Firefox
+      // ends an idle event page after half a minute, a request still waiting counting for
+      // nothing, so what has landed must not go down with it — the next refresh then asks only
+      // for what is missing. Inside one edition the parts already on file stay in the picture
+      // until their replacements arrive, so a forced refresh never blanks the column.
+      await api.storage.local.set({ [NEWS_CACHE_KEY]: edition({ ...(sameEdition ? previous.repos : {}), ...repos }) });
     }
 
-    const next = { since: window.since, until: window.until, hour: settings.hour, days: settings.days, fetchedAt: now(), repos };
+    const next = edition(repos);
     await api.storage.local.set({ [NEWS_CACHE_KEY]: next });
     return next;
   })().finally(() => {

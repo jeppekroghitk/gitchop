@@ -1374,6 +1374,17 @@ window.__gitchop = window.__gitchop || {};
       revealed() {
         count?.odometer.reveal();
       },
+      /**
+       * The edition changed on file while the menu is up — a repository landing in a refresh that
+       * is still going — so the column is painted from it: the section that came in fills, the
+       * rest keep their skeletons. The background's answer is the whole state, so nothing here
+       * has to merge.
+       */
+      updateNews(next) {
+        if (!newsEl || !next) return;
+        newsData = next;
+        renderNews();
+      },
     };
   };
 })();
