@@ -86,7 +86,8 @@ form: GitHub clears the ticks the moment the owner is changed there. Then paste 
 fine-grained token covers one owner, so a second organisation is the same three steps again. Each
 saved token is listed under the owner whose private repositories it reaches, so two organisations'
 tokens read as two organisations, not two copies of you. One that reaches no private repository yet
-says so. That is what a token awaiting an organisation's approval looks like: every token can list
+says so, and is listed under the owner you named in the recipe until it does. Every row says when
+the token expires. That is what a token awaiting an organisation's approval looks like: every token can list
 public repositories, whoever it was made for, so until the approval it indexes the public half of
 every organisation you belong to and nothing private, and the index card's private count reads zero.
 

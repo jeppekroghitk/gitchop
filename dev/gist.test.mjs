@@ -1,5 +1,13 @@
 import assert from 'node:assert';
-import { parseStore, serialise } from '../src/lib/gist.js';
+import { parseExpiry, parseStore, serialise } from '../src/lib/gist.js';
+
+// When a token runs out, from the header GitHub sends with every request made with it.
+assert.equal(parseExpiry('2026-12-31 12:00:00 UTC'), '2026-12-31T12:00:00.000Z', "GitHub's header, as an ISO stamp");
+assert.equal(parseExpiry(' 2026-12-31 12:00:00 UTC '), '2026-12-31T12:00:00.000Z', 'whitespace around it is nothing');
+assert.equal(parseExpiry('2026-12-31T12:00:00Z'), '2026-12-31T12:00:00.000Z', 'an ISO stamp is taken as it is');
+assert.equal(parseExpiry(null), null, 'no header is a token without an expiry');
+assert.equal(parseExpiry(''), null);
+assert.equal(parseExpiry('never'), null, 'an unreadable header is no expiry either');
 
 const at = new Date('2026-09-28T08:00:00.000Z');
 const backup = {

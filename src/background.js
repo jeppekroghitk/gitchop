@@ -144,6 +144,8 @@ async function storeTokens(entries) {
       kind: entry.kind ?? null,
       scopes: entry.scopes ?? [],
       owners: Array.isArray(entry.owners) ? entry.owners : null,
+      target: entry.target ?? null,
+      expiresAt: entry.expiresAt ?? null,
       sealed: await seal(entry.secret, vaultKey),
     });
   }
@@ -154,12 +156,14 @@ async function storeTokens(entries) {
 async function state() {
   const config = await readConfig();
   return {
-    tokens: config.tokens.map(({ id, login, kind, scopes, owners }) => ({
+    tokens: config.tokens.map(({ id, login, kind, scopes, owners, target, expiresAt }) => ({
       id,
       login: login ?? null,
       kind: kind ?? null,
       scopes: scopes ?? [],
       owners: Array.isArray(owners) ? owners : null,
+      target: target ?? null,
+      expiresAt: expiresAt ?? null,
       broad: scopesGrantWrite(scopes),
     })),
     hasToken: config.tokens.length > 0,
@@ -324,7 +328,7 @@ async function pull({ force = false } = {}) {
   return { changed: JSON.stringify(applied) !== before, count: applied[LINKS_KEY].length };
 }
 
-async function addToken({ token }) {
+async function addToken({ token, owner }) {
   const trimmed = String(token ?? '').trim();
   if (!trimmed) throw new Error('A token is required.');
 
@@ -333,9 +337,11 @@ async function addToken({ token }) {
 
   // Only for labelling, so never let it block saving — a fine-grained token may decline /user while
   // working perfectly for repositories.
-  const who = await identify(trimmed).catch(() => ({ login: null, scopes: [], kind: tokenKind(trimmed) }));
+  const who = await identify(trimmed).catch(() => ({ login: null, scopes: [], kind: tokenKind(trimmed), expiresAt: null }));
   // The owner a fine-grained token speaks for shows only in the private repositories it lists. Not
   // knowing is no reason to refuse the token either; building the index asks again and fills it in.
+  // Until then the owner named in the recipe stands in — GitHub has no way of asking a token whom
+  // it was made for, and a token awaiting an organisation's approval lists nothing that says.
   const owners = await ownersReachable(trimmed).catch(() => null);
   const entry = {
     id: newId(),
@@ -344,6 +350,8 @@ async function addToken({ token }) {
     kind: who.kind ?? tokenKind(trimmed),
     scopes: who.scopes ?? [],
     owners,
+    target: String(owner ?? '').trim().replace(/^@/, '') || null,
+    expiresAt: who.expiresAt ?? null,
   };
   await storeTokens([...saved, entry]);
   await writeConfig({ lastError: null });
@@ -419,6 +427,9 @@ async function buildIndex() {
     try {
       const repos = await listAccessibleRepos(entry.secret);
       entry.owners = privateOwnersOf(repos);
+      // The expiry rides on every answer, so a token saved before it was read learns it here.
+      const who = await identify(entry.secret).catch(() => null);
+      if (who) entry.expiresAt = who.expiresAt ?? null;
       for (const repo of repos) {
         const key = repo.fullName.toLowerCase();
         if (seen.has(key)) continue;
