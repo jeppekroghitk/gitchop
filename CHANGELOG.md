@@ -3,7 +3,7 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
-## Unreleased
+## 2.8.0
 
 - The contributions count settles sooner. The reels still set off together and stop one at a time,
   left to right, but each stops 400 ms after the one before rather than 600, so a four-digit count
