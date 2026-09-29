@@ -64,7 +64,10 @@ one link works on every repository:
 `https://github.com/{repoFull}/actions` goes to the Actions tab of whichever repository you are
 looking at. A link whose placeholders cannot be filled is greyed out.
 
-Repositories owned by accounts you have linked are ranked above the rest of GitHub.
+Repositories owned by accounts you have linked are ranked above the rest of GitHub. Type an exact
+`owner/repository`, or paste its address, and that repository is the first row whatever else
+matches — `leantime/leantime` lands on Leantime/leantime even when your own index holds five other
+leantime things.
 
 The panel itself — the links and the search — has a switch under Panels in Settings. Off, the menu
 is only the columns you have on: the news alone, if that is all you want. With nothing else on the
@@ -179,7 +182,7 @@ No build step for the code — the files in `src/` are what runs. Packaging only
 `manifest.json` each browser gets, since the two disagree about the background script.
 
 ```sh
-node dev/context.test.mjs && node dev/repos.test.mjs && node dev/effects.test.mjs && node dev/pulls.test.mjs && node dev/news.test.mjs && node dev/contributions.test.mjs && node dev/odometer.test.mjs && node dev/links.test.mjs && node dev/gist.test.mjs
+node dev/context.test.mjs && node dev/repos.test.mjs && node dev/effects.test.mjs && node dev/pulls.test.mjs && node dev/news.test.mjs && node dev/contributions.test.mjs && node dev/odometer.test.mjs && node dev/links.test.mjs && node dev/gist.test.mjs && node dev/menu.test.mjs
 node dev/build.mjs all                                 # dist/gitchop-<version>-<browser>.<ext>
 node dev/build.mjs chrome --no-zip                     # unpacked, for chrome://extensions
 open dev/harness.html                                  # the menu, without installing

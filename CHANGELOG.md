@@ -35,6 +35,12 @@ it from.
   token saved before this learns its expiry the next time the index is built; its owner is known
   only from the recipe, so a row that needs the name is a matter of removing the token and pasting
   it again with the owner filled in.
+- An exact `owner/repository` is the first row under Repositories, whatever else matches. The
+  index's matches came first and filled the five slots, so `leantime/leantime` showed five
+  ITK-Leantime repositories whose names contain the words and never Leantime/leantime itself, which
+  GitHub's direct lookup had found and the list had no room for. The exact hit, from the index or
+  from GitHub, now goes to the top and the fifth match makes room; a pasted github.com address
+  counts as its owner/repository, and case does not matter. The ordering has a test of its own.
 
 ## 2.7.0
 

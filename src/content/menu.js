@@ -50,6 +50,33 @@ window.__gitchop = window.__gitchop || {};
   /** How long a popover outlives the mouse leaving its chip — long enough to reach it diagonally. */
   const POP_LINGER = 120;
 
+  /**
+   * The rows under Repositories: the index's matches, then GitHub's, without repeats — and an
+   * exact owner/repository, from either, first of all. Typing leantime/leantime must land on
+   * Leantime/leantime even when the index holds five other leantime things whose names contain
+   * the words; the index is favoured, but not over the one repository that was named outright.
+   * A github.com address pasted whole counts as its owner/repository.
+   */
+  function orderRepos(query, local, remote, limit) {
+    const wanted = String(query ?? '')
+      .trim()
+      .replace(/^https?:\/\/(www\.)?github\.com\//i, '')
+      .replace(/\/+$/, '')
+      .toLowerCase();
+    const seen = new Set();
+    const merged = [];
+    for (const repo of [...(local ?? []), ...(remote ?? [])]) {
+      const key = String(repo?.fullName ?? '').toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(repo);
+    }
+    const exact = merged.findIndex((repo) => repo.fullName.toLowerCase() === wanted);
+    if (exact > 0) merged.unshift(...merged.splice(exact, 1));
+    return merged.slice(0, limit);
+  }
+  gc.orderRepos = orderRepos;
+
   gc.createMenu = function createMenu({ ctx, links, pulls, news, contributions, panel: panelSetting, onClose, onOptions, onLinksChanged }) {
     /**
      * The panel — the links and the search — is the menu unless switched off in Settings; then the
@@ -663,11 +690,8 @@ window.__gitchop = window.__gitchop || {};
         list.append(section('Repositories'));
 
         const local = mine.query === query ? mine.results : [];
-        const seen = new Set(local.map((repo) => repo.fullName.toLowerCase()));
-        const remote = (repos.query === query ? repos.results : []).filter(
-          (repo) => !seen.has(repo.fullName.toLowerCase()),
-        );
-        const results = [...local, ...remote].slice(0, REPO_SLOTS);
+        const remote = repos.query === query ? repos.results : [];
+        const results = orderRepos(query, local, remote, REPO_SLOTS);
         const pending = query.length >= SEARCH_AFTER && repos.query !== query;
 
         for (const repo of results) addItem(repoEntry(repo));
