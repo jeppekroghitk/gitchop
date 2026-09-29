@@ -11,7 +11,7 @@ import {
   withIds,
 } from './lib/links.js';
 import { createStore, identify, readStore, scopesGrantWrite, tokenKind, tokenLabel, writeStore } from './lib/gist.js';
-import { findRepos, listAccessibleRepos, matchIndex, ownersFromLinks, ownersReachable, privateOwnersOf } from './lib/repos.js';
+import { REPO_LIMIT, findRepos, listAccessibleRepos, matchIndex, ownersFromLinks, ownersReachable, privateOwnersOf } from './lib/repos.js';
 import { newVaultKey, seal, unseal } from './lib/vault.js';
 import {
   LANES,
@@ -935,12 +935,12 @@ const HANDLERS = {
   /** Instant, from the local index. No network, so the menu can call it on every settle. */
   'gitchop:repos:mine': async (message) => {
     const index = await readIndex();
-    return { results: matchIndex(index.repos, message.query) };
+    return { results: matchIndex(index.repos, message.query, REPO_LIMIT) };
   },
   'gitchop:repos': async (message) => {
     const [first] = await loadTokens();
     const owners = ownersFromLinks(await loadLinks());
-    return { results: await findRepos(message.query, first?.secret, owners), owners };
+    return { results: await findRepos(message.query, first?.secret, owners, REPO_LIMIT), owners };
   },
   'gitchop:index:state': async () => indexState(await readIndex()),
   /** Instant: the snapshot as it stands, and whether it is worth asking for a fresh one. */

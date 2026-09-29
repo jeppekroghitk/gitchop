@@ -66,8 +66,8 @@ looking at. A link whose placeholders cannot be filled is greyed out.
 
 Repositories owned by accounts you have linked are ranked above the rest of GitHub. Type an exact
 `owner/repository`, or paste its address, and that repository is the first row whatever else
-matches — `leantime/leantime` lands on Leantime/leantime even when your own index holds five other
-leantime things.
+matches — `leantime/leantime` lands on Leantime/leantime even when your own index holds ten other
+leantime things. Up to ten repositories are listed, and the list scrolls.
 
 The panel itself — the links and the search — has a switch under Panels in Settings. Off, the menu
 is only the columns you have on: the news alone, if that is all you want. With nothing else on the

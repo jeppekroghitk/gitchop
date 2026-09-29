@@ -18,7 +18,8 @@ window.__gitchop = window.__gitchop || {};
    * The repository area is always exactly this many rows tall while a search is on, filled with
    * skeletons or blanks, so the panel does not resize when results land under the cursor.
    */
-  const REPO_SLOTS = 5;
+  /** Rows under Repositories, and the skeletons standing in for them: the same ten the background asks for (REPO_LIMIT in repos.js). */
+  const REPO_SLOTS = 10;
   const GHOST_WIDTHS = ['62%', '47%', '71%', '54%', '43%'];
 
   /** Where you can land inside a repository, likeliest first. */
