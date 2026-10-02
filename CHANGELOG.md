@@ -3,7 +3,7 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
-## Unreleased
+## 2.9.0
 
 - The pull requests are asked for on every open, and what left is seen to leave. The column
   painted its snapshot and asked GitHub again only when that was older than a minute, and the
