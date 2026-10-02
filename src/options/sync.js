@@ -329,7 +329,7 @@ function advanced() {
     advancedOpen = box.open;
   });
   const { node, prefill } = recipe();
-  box.append(element('summary', null, 'Advanced: use a personal access token'), node, classicCaution());
+  box.append(element('summary', null, 'Use a personal access token instead'), node, classicCaution());
   prefillOwner = (owner) => {
     advancedOpen = true;
     box.open = true;
