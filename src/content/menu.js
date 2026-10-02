@@ -15,12 +15,60 @@ import { createPulls } from './menu/pulls.js';
 import { createSearch } from './menu/search.js';
 import { createShell } from './menu/shell.js';
 
+/** @import { Answer } from '../background/messages.js' */
+
+/**
+ * The one object every module of the menu is handed: what it was opened with, the frame, the
+ * shared cursor, and each module, through which they reach one another.
+ * @typedef {{
+ *   ctx: ReturnType<typeof import('./context.js').readContext>,
+ *   onClose: () => void,
+ *   onOptions: () => void,
+ *   onLinksChanged?: (links: import('../lib/links.js').Link[]) => void,
+ *   hasPanel: boolean,
+ *   reduced: boolean,
+ *   el: ReturnType<typeof createShell>,
+ *   state: {
+ *     region: 'panel' | 'pulls',
+ *     items: any[],
+ *     activeIndex: number,
+ *     drill: any,
+ *     form: any,
+ *     pullsItems: any[],
+ *     pullsIndex: number,
+ *   },
+ *   dismiss(): void,
+ *   pulls: ReturnType<typeof createPulls>,
+ *   news: ReturnType<typeof createNews>,
+ *   list: ReturnType<typeof createList>,
+ *   search: ReturnType<typeof createSearch>,
+ *   form: ReturnType<typeof createForm>,
+ *   keyboard: ReturnType<typeof createKeyboard>,
+ * }} Menu
+ */
+
+/**
+ * What the menu opens with: the page it is over, the links, and the background's instant answers
+ * — each null when the background did not give one, which means that part is not shown.
+ * @param {{
+ *   ctx: Menu['ctx'],
+ *   links: import('../lib/links.js').Link[],
+ *   pulls: Answer<'gitchop:pulls'> | null,
+ *   news: Answer<'gitchop:news'> | null,
+ *   contributions: Answer<'gitchop:contributions'> | null,
+ *   rate: Answer<'gitchop:rate'> | null,
+ *   panel: Answer<'gitchop:panel'> | null,
+ *   onClose: () => void,
+ *   onOptions: () => void,
+ *   onLinksChanged?: Menu['onLinksChanged'],
+ * }} options
+ */
 export function createMenu({ ctx, links, pulls, news, contributions, rate, panel: panelSetting, onClose, onOptions, onLinksChanged }) {
   // The count is built before the frame, which hangs it in whichever head stands nearest the panel.
   const count = createCount(contributions);
   const el = createShell({ panelSetting, pulls, news, count: count.view, onOptions });
 
-  const menu = {
+  const menu = /** @type {Menu} */ (/** @type {Omit<Menu, 'pulls' | 'news' | 'list' | 'search' | 'form' | 'keyboard'>} */ ({
     ctx,
     onClose,
     onOptions,
@@ -53,7 +101,7 @@ export function createMenu({ ctx, links, pulls, news, contributions, rate, panel
       menu.search.cancel();
       onClose();
     },
-  };
+  }));
 
   menu.pulls = createPulls(menu, pulls);
   menu.news = createNews(menu, news);
@@ -97,7 +145,10 @@ export function createMenu({ ctx, links, pulls, news, contributions, rate, panel
     },
     /** The budgets' corner of the dark, for the layer to place beside the menu: it is not in the menu's own flow. */
     gauge: gauge.element,
-    /** The background read another answer from GitHub while the menu is up: the gauge follows. */
+    /**
+     * The background read another answer from GitHub while the menu is up: the gauge follows.
+     * @param {Answer<'gitchop:rate'>} next
+     */
     updateRate(next) {
       if (!next) return;
       gauge.update(next);
@@ -109,6 +160,7 @@ export function createMenu({ ctx, links, pulls, news, contributions, rate, panel
     /**
      * The snapshot changed on file while the menu is up — the alarm landed, or Settings asked —
      * so the column is painted from it, what left leaving as it would after the menu's own ask.
+     * @param {Answer<'gitchop:pulls'>} next
      */
     updatePulls(next) {
       if (!el.pullsEl || !next) return;
@@ -119,6 +171,7 @@ export function createMenu({ ctx, links, pulls, news, contributions, rate, panel
      * is still going — so the column is painted from it: the section that came in fills, the
      * rest keep their skeletons. The background's answer is the whole state, so nothing here
      * has to merge.
+     * @param {Answer<'gitchop:news'>} next
      */
     updateNews(next) {
       if (!el.newsEl || !next) return;

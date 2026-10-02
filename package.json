@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test dev/",
-    "build": "node dev/build.mjs all"
+    "build": "node dev/build.mjs all",
+    "typecheck": "tsc -p ."
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

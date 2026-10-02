@@ -6,6 +6,11 @@
 export const KEY = 'effects';
 
 /**
+ * The chop's settings as stored, each a whole number on its slider's scale.
+ * @typedef {{ enabled: number, colour: number, epicness: number, speed: number, menuDelay: number }} EffectsSettings
+ */
+
+/**
  * The colour control is these named chips rather than a hue slider — a swatch you can see beats
  * a number of degrees. The stored value is still a hue (steel is the special 0), so any hue that
  * arrives from elsewhere keeps working; these are just the ones the page offers. The chips lay
@@ -51,15 +56,21 @@ export const SLIDERS = [
 
 export const DEFAULTS = Object.fromEntries(SLIDERS.map((slider) => [slider.id, slider.value]));
 
-/** Storage is shared state: whatever shape comes back, every value ends up on its slider's scale. */
+/**
+ * Storage is shared state: whatever shape comes back, every value ends up on its slider's scale.
+ * @param {unknown} [raw]
+ * @returns {EffectsSettings}
+ */
 export function sanitize(raw) {
-  const source = raw && typeof raw === 'object' ? raw : {};
+  /** @type {Record<string, unknown>} */
+  const source = raw && typeof raw === 'object' ? /** @type {Record<string, unknown>} */ (raw) : {};
+  /** @type {Record<string, number>} */
   const effects = {};
   for (const { id, min, max, value } of SLIDERS) {
     const number = Number(source[id]);
     effects[id] = Number.isFinite(number) ? Math.min(max, Math.max(min, Math.round(number))) : value;
   }
-  return effects;
+  return /** @type {EffectsSettings} */ (effects);
 }
 
 /**
@@ -67,14 +78,16 @@ export function sanitize(raw) {
  * the glow deepens from the first notch, sparks arrive early, and the flare joins from the
  * middle — so every part of the range reads differently, and 100 is unmistakably not 60. The
  * flare is a burst of light along the cut itself; there is no screen-wide flash at any setting.
+ * @param {unknown} [raw]
  */
 export function resolve(raw) {
   const fx = sanitize(raw);
   const e = fx.epicness / 100;
+  /** @type {(from: number, to: number, power?: number) => number} */
   const stage = (from, to, power = 1) => Math.min(1, Math.max(0, (e - from) / (to - from))) ** power;
   const flare = stage(0.25, 0.9);
   const pace = 100 / fx.speed;
-  const slowest = 100 / SLIDERS.find((slider) => slider.id === 'speed').min;
+  const slowest = 100 / /** @type {(typeof SLIDERS)[number]} */ (SLIDERS.find((slider) => slider.id === 'speed')).min;
   return {
     enabled: fx.enabled === 1,
     // The slice runs at the slider's pace exactly. The aftermath — the wound, the flare, the

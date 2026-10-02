@@ -3,6 +3,7 @@ import { PANEL_KEY, api, sanitizePanel } from '../lib/links.js';
 /**
  * Whether the panel itself — the links and the search — rises with the menu. Off, the columns stand
  * on their own; the menu decides for itself that with no column to stand, the panel stays.
+ * @returns {Promise<import('../lib/links.js').PanelSettings>}
  */
 export async function readPanel() {
   try {
@@ -13,6 +14,7 @@ export async function readPanel() {
   }
 }
 
+/** @returns {Promise<{ settings: import('../lib/links.js').PanelSettings, show: boolean }>} */
 export async function panelState() {
   const settings = await readPanel();
   return { settings, show: settings.enabled === 1 };

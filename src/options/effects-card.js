@@ -7,14 +7,18 @@ import { api } from '../lib/links.js';
 // and on the dev server, never in src/.
 import { createStage } from './stage.js';
 
-const host = document.getElementById('effects');
-const statusEl = document.getElementById('effects-status');
+const host = /** @type {HTMLElement} */ (document.getElementById('effects'));
+const statusEl = /** @type {HTMLElement} */ (document.getElementById('effects-status'));
 
 let effects = { ...DEFAULTS };
+/** @type {number | null} */
 let saveTimer = null;
 let lastWritten = '';
+/** @type {number | null} */
 let statusTimer = null;
+/** @type {ReturnType<typeof createStage> | null} */
 let stage = null;
+/** @type {HTMLElement | null} */
 let slidersEl = null;
 const updaters = new Map();
 
@@ -244,7 +248,9 @@ function preview() {
   const running = createStage({ reduced, effects: fx });
   stage = running;
 
+  /** @type {number | null} */
   let linger = null;
+  /** @param {KeyboardEvent} event */
   function onKey(event) {
     if (event.key === 'Escape') close();
   }

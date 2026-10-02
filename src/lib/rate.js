@@ -10,6 +10,21 @@
 export const ANONYMOUS = 'anonymous';
 
 /**
+ * What one answer said about one budget. `resetAt` and `at` are epoch milliseconds.
+ * @typedef {{ resource: string, limit: number, remaining: number, used: number, resetAt: number, at: number }} RateReading
+ */
+
+/**
+ * Every reading on file: by scope (a login, or ANONYMOUS), then by budget.
+ * @typedef {Record<string, Record<string, Omit<RateReading, 'resource'>>>} RateTable
+ */
+
+/**
+ * One scope's budgets as the gauge lists them.
+ * @typedef {{ id: string, label: string, resources: { id: string, label: string, limit: number, remaining: number, resetAt: number }[] }} RateScope
+ */
+
+/**
  * The budgets gitchop draws on, in the order the gauge lists them, by GitHub's own names — the
  * GraphQL allowance goes on the pull requests and the year's contributions, the REST allowance on
  * the news, the index and the gist, and the search allowance on typing a repository. Any other
@@ -21,10 +36,17 @@ export const RESOURCES = [
   { id: 'search', label: 'search' },
 ];
 
-/** What one answer says about the budget it was charged to, or null when it says nothing. */
+/**
+ * What one answer says about the budget it was charged to, or null when it says nothing.
+ * @param {{ get?: (name: string) => string | null } | null | undefined} headers
+ * @param {number} [now]
+ * @returns {RateReading | null}
+ */
 export function readRate(headers, now = Date.now()) {
+  /** @type {(name: string) => string | null} */
   const get = (name) => headers?.get?.(name) ?? null;
   // A header that is not there is not a number, whatever Number makes of null.
+  /** @type {(name: string) => number} */
   const num = (name) => (get(name) == null ? NaN : Number(get(name)));
   const limit = num('x-ratelimit-limit');
   const remaining = num('x-ratelimit-remaining');
@@ -45,6 +67,10 @@ export function readRate(headers, now = Date.now()) {
  * The table with one reading laid in. Answers come back in any order: within one allowance the
  * lowest remaining is the latest word, and a reading from an allowance already turned over is no
  * word at all. The table is returned as it was when the reading adds nothing.
+ * @param {RateTable} table
+ * @param {string} scope
+ * @param {RateReading | null} reading
+ * @returns {RateTable}
  */
 export function noteRate(table, scope, reading) {
   if (!reading || !scope) return table;
@@ -58,7 +84,11 @@ export function noteRate(table, scope, reading) {
   return { ...table, [scope]: { ...scoped, [reading.resource]: { limit, remaining, used, resetAt, at } } };
 }
 
-/** The scope a token's readings are kept under: its login, or its id until GitHub has said who it is. */
+/**
+ * The scope a token's readings are kept under: its login, or its id until GitHub has said who it is.
+ * @param {{ login?: string | null, id?: string } | null | undefined} token
+ * @returns {string}
+ */
 export function scopeOf(token) {
   return String(token?.login || token?.id || '');
 }
@@ -67,8 +97,12 @@ export function scopeOf(token) {
  * The budgets as the gauge lists them: this profile's tokens by login, in their order and each
  * once, then the nameless requests — and only those with a reading on file. A budget that is
  * not in the table has not been drawn on since the table was started, and has no line.
+ * @param {RateTable | null | undefined} table
+ * @param {{ login?: string | null, id?: string }[] | null | undefined} tokens
+ * @returns {RateScope[]}
  */
 export function presentRate(table, tokens) {
+  /** @type {{ id: string, label: string }[]} */
   const scopes = [];
   const seen = new Set();
   for (const token of tokens ?? []) {
@@ -83,6 +117,7 @@ export function presentRate(table, tokens) {
     .filter((scope) => scope.resources.length > 0);
 }
 
+/** @param {Record<string, Omit<RateReading, 'resource'>> | undefined} scoped */
 function presentResources(scoped) {
   if (!scoped || typeof scoped !== 'object') return [];
   const known = RESOURCES.map((entry) => entry.id);

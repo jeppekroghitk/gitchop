@@ -4,6 +4,7 @@
  */
 import { node } from '../dom.js';
 
+/** @param {import('../menu.js').Menu} menu */
 export function createKeyboard(menu) {
   const { state, hasPanel } = menu;
   const { panel, filter, keys, stage, pullsList } = menu.el;
@@ -54,7 +55,7 @@ export function createKeyboard(menu) {
     if (!menu.pulls.visible() || state.pullsItems.length === 0) return;
     state.region = 'pulls';
     stage.dataset.region = state.region;
-    pullsList.focus({ preventScroll: true });
+    /** @type {HTMLElement} */ (pullsList).focus({ preventScroll: true });
     paint();
   }
 
@@ -112,15 +113,15 @@ export function createKeyboard(menu) {
   // single-key shortcuts would start listening again. The count in the head is dead space too:
   // it is for looking at.
   stage.addEventListener('mousedown', (event) => {
-    if (event.target.closest?.('input, button, a[href]')) return;
+    if (/** @type {Element} */ (event.target).closest?.('input, button, a[href]')) return;
     event.preventDefault();
   });
 
   /** Tab stays inside the panel: it wraps at both ends instead of reaching the page behind. */
   function trapTab(event) {
-    const stops = [...panel.querySelectorAll('input, a[href], button')].filter((stop) => !stop.hidden);
+    const stops = /** @type {HTMLElement[]} */ ([...panel.querySelectorAll('input, a[href], button')]).filter((stop) => !stop.hidden);
     if (stops.length === 0) return;
-    const here = stops.indexOf(panel.getRootNode().activeElement);
+    const here = stops.indexOf(/** @type {HTMLElement} */ (/** @type {ShadowRoot} */ (panel.getRootNode()).activeElement));
     const edge = event.shiftKey ? 0 : stops.length - 1;
     if (here !== edge) return;
     event.preventDefault();
@@ -186,7 +187,7 @@ export function createKeyboard(menu) {
       menu.list.move(-1);
       return;
     }
-    if (event.key === 'Enter' && panel.getRootNode().activeElement === filter) {
+    if (event.key === 'Enter' && /** @type {ShadowRoot} */ (panel.getRootNode()).activeElement === filter) {
       event.preventDefault();
       menu.list.open(menu.list.active(), event.metaKey || event.ctrlKey || event.shiftKey);
     }

@@ -3,8 +3,8 @@ import { api } from '../lib/links.js';
 /** Without these, the content script is never injected and the "." key does nothing at all. */
 const NEEDED = { origins: ['https://github.com/*', 'https://api.github.com/*'] };
 
-const card = document.getElementById('access-card');
-const host = document.getElementById('access');
+const card = /** @type {HTMLElement} */ (document.getElementById('access-card'));
+const host = /** @type {HTMLElement} */ (document.getElementById('access'));
 
 function element(tag, className, text) {
   const node = document.createElement(tag);

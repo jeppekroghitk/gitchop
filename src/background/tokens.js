@@ -6,6 +6,13 @@ import { newId, readConfig, state, writeConfig } from './config.js';
 import { CONTRIB_CACHE_KEY, INDEX_KEY, NEWS_CACHE_KEY, PULLS_CACHE_KEY, RATE_KEY } from './keys.js';
 import { forgetRates, rememberScope } from './rate.js';
 
+/** @import { TokenEntry } from './config.js' */
+
+/**
+ * A token opened for use: the stored entry with its secret beside it. It never leaves the background.
+ * @typedef {TokenEntry & { secret: string }} OpenToken
+ */
+
 /**
  * Tokens are a list because a fine-grained token has exactly one resource owner. Two organisations
  * and a personal account means three tokens. The single-token alternative is a classic token with
@@ -17,9 +24,11 @@ import { forgetRates, rememberScope } from './rate.js';
  * Tokens come out of storage only here, and go back only through storeTokens, so a plain token
  * cannot survive a write. Entries still carrying a legacy `token` field are read as-is and sealed by
  * the migration below.
+ * @returns {Promise<OpenToken[]>}
  */
 export async function loadTokens() {
   const config = await readConfig();
+  /** @type {OpenToken[]} */
   const opened = [];
   for (const entry of config.tokens) {
     let secret = typeof entry.token === 'string' ? entry.token : null;
@@ -38,9 +47,11 @@ export async function loadTokens() {
   return opened;
 }
 
+/** @param {OpenToken[]} entries */
 export async function storeTokens(entries) {
   const config = await readConfig();
   const vaultKey = config.vaultKey ?? newVaultKey();
+  /** @type {TokenEntry[]} */
   const tokens = [];
   for (const entry of entries) {
     tokens.push({
@@ -65,6 +76,7 @@ export async function sealLegacyTokens() {
   }
 }
 
+/** @param {{ token: string, owner?: string }} request */
 export async function addToken({ token, owner }) {
   const trimmed = String(token ?? '').trim();
   if (!trimmed) throw new Error('A token is required.');
@@ -74,6 +86,7 @@ export async function addToken({ token, owner }) {
 
   // Only for labelling, so never let it block saving — a fine-grained token may decline /user while
   // working perfectly for repositories.
+  /** @type {import('../lib/gist.js').Identity} */
   const who = await identify(trimmed).catch(() => ({ login: null, scopes: [], kind: tokenKind(trimmed), expiresAt: null }));
   // The owner a fine-grained token speaks for shows only in the private repositories it lists. Not
   // knowing is no reason to refuse the token either; building the index asks again and fills it in.
@@ -95,10 +108,12 @@ export async function addToken({ token, owner }) {
   return state();
 }
 
+/** @param {{ id: string }} request */
 export async function removeToken({ id }) {
   const config = await readConfig();
   const kept = (await loadTokens()).filter((entry) => entry.id !== id);
   await storeTokens(kept);
+  /** @type {Partial<import('./config.js').Config>} */
   const patch = {};
 
   if (kept.length === 0) {

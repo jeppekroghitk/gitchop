@@ -10,6 +10,10 @@ const IN_REPO = [
   ['🐛', 'Issues', 'issues'],
 ];
 
+/**
+ * @param {import('../menu.js').Menu} menu
+ * @param {import('../../lib/links.js').Link[]} links
+ */
 export function createList(menu, links) {
   const { ctx, state } = menu;
   const { filter, list } = menu.el;
@@ -125,7 +129,7 @@ export function createList(menu, links) {
     // string building, and "probably fine" is not a place to put an href.
     const interactive = entry.usable && !entry.run && isSafeUrl(entry.url);
     const item = node(interactive ? 'a' : 'div', 'gc-item');
-    if (interactive) item.href = entry.url;
+    if (interactive) /** @type {HTMLAnchorElement} */ (item).href = entry.url;
     else if (!entry.usable) item.dataset.blocked = 'true';
     if (entry.owned) item.dataset.owned = 'true';
     if (entry.tip) item.title = entry.tip;

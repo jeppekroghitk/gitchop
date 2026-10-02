@@ -8,9 +8,9 @@
  */
 const KEY = 'gitchop:settings:page';
 
-const rail = document.querySelector('.rail');
-const items = [...rail.querySelectorAll('.rail-item')];
-const panes = [...document.querySelectorAll('.pane[data-page]')];
+const rail = /** @type {HTMLElement} */ (document.querySelector('.rail'));
+const items = /** @type {HTMLElement[]} */ ([...rail.querySelectorAll('.rail-item')]);
+const panes = /** @type {HTMLElement[]} */ ([...document.querySelectorAll('.pane[data-page]')]);
 
 function known(id) {
   return items.some((item) => item.dataset.page === id) ? id : null;
@@ -91,7 +91,7 @@ export function mount() {
   for (const item of items) item.addEventListener('click', () => show(item.dataset.page));
   // Up and down walk the rail and Home and End jump to its ends, each landing on the page it names.
   rail.addEventListener('keydown', (event) => {
-    const at = items.indexOf(document.activeElement);
+    const at = items.indexOf(/** @type {HTMLElement} */ (document.activeElement));
     if (at < 0) return;
     const next = { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: items.length - 1 }[event.key];
     if (next === undefined) return;

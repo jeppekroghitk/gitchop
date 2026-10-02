@@ -1,5 +1,6 @@
 /** The repository search under the links: the local index on every rebuild, GitHub once typing rests. */
-import { api, isSafeUrl } from '../../lib/links.js';
+import { isSafeUrl } from '../../lib/links.js';
+import { send } from '../../lib/messages.js';
 import { REPO_LIMIT } from '../../lib/repos.js';
 import { note, section, skeletons } from './parts.js';
 import { orderRepos } from './rows.js';
@@ -22,6 +23,10 @@ const SETTLE = 110;
  */
 const REPO_SLOTS = REPO_LIMIT;
 
+/** @import { Repo } from '../../lib/repos.js' */
+/** @import { Menu } from '../menu.js' */
+
+/** @param {Repo} repo */
 function repoEntry(repo) {
   return {
     usable: isSafeUrl(repo.url),
@@ -35,16 +40,21 @@ function repoEntry(repo) {
   };
 }
 
+/** @param {Menu} menu */
 export function createSearch(menu) {
   const { state } = menu;
   const { filter, list } = menu.el;
 
   // Both result sets carry the query they belong to, so a render can never mix a fresh query
   // with results computed for an older one.
+  /** @type {{ query: string, status: 'idle' | 'done' | 'error', results: Repo[], error: string }} */
   let repos = { query: '', status: 'idle', results: [], error: '' };
+  /** @type {{ query: string, results: Repo[] }} */
   let mine = { query: '', results: [] };
+  /** @type {number | null} */
   let searchTimer = null;
   let searchRun = 0;
+  /** @type {number | null} */
   let settleTimer = null;
   let localRun = 0;
 
@@ -53,7 +63,10 @@ export function createSearch(menu) {
     searchRun += 1;
   }
 
-  /** The Repositories block of the list, for what has been typed: results, skeletons, or a word on why not. */
+  /**
+   * The Repositories block of the list, for what has been typed: results, skeletons, or a word on why not.
+   * @param {string} query
+   */
   function appendResults(query) {
     list.append(section('Repositories'));
 
@@ -80,9 +93,10 @@ export function createSearch(menu) {
 
     const run = ++searchRun;
     searchTimer = setTimeout(async () => {
+      /** @type {typeof repos} */
       let next;
       try {
-        const response = await api.runtime.sendMessage({ type: 'gitchop:repos', query });
+        const response = await send({ type: 'gitchop:repos', query });
         if (!response?.ok) throw new Error(response?.error ?? 'The search did not answer.');
         next = { query, status: 'done', results: response.results ?? [], error: '' };
       } catch (error) {
@@ -95,7 +109,10 @@ export function createSearch(menu) {
     }, SEARCH_DELAY);
   }
 
-  /** The local index answers in a millisecond or two, so it is read before every rebuild. */
+  /**
+   * The local index answers in a millisecond or two, so it is read before every rebuild.
+   * @param {string} query
+   */
   async function readMine(query) {
     const run = ++localRun;
     if (query.length < 2) {
@@ -103,7 +120,7 @@ export function createSearch(menu) {
       return;
     }
     try {
-      const response = await api.runtime.sendMessage({ type: 'gitchop:repos:mine', query });
+      const response = await send({ type: 'gitchop:repos:mine', query });
       if (run !== localRun) return;
       mine = { query, results: response?.ok ? response.results ?? [] : [] };
     } catch {
@@ -139,7 +156,7 @@ export function createSearch(menu) {
     settle,
     /** A link was just saved over the filter: whatever GitHub had said belongs to no query now. */
     reset() {
-      repos = { status: 'idle', results: [], owners: [], error: '' };
+      repos = { query: '', status: 'idle', results: [], error: '' };
     },
   };
 }

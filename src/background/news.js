@@ -27,10 +27,22 @@ export const NEWS_ALARM = 'gitchop:news';
  * noon has no place in it yet — and a repository that failed is asked again after a while rather
  * than on every open. Each repository is fetched with the token that can see it, remembered from
  * last time, and anonymously when no token can: public repositories need none.
+ * One repository's part of the edition: its digest, the token that reached it last, and — when
+ * this edition's fetch failed — the sentence that says why and when.
+ * @typedef {import('../lib/news.js').Digest & { tokenId?: string | null, failedAt?: string | null }} NewsPart
  */
+
+/**
+ * The edition on file: the window it covers, the settings it was made up under, and each
+ * subscribed repository's part by its lowercased name.
+ * @typedef {{ since: string, until: string, hour: number, days: number, fetchedAt: string, repos: Record<string, NewsPart> }} NewsCache
+ */
+
+/** @type {Promise<NewsCache | null> | null} */
 let newsRefresh = null;
 const NEWS_RETRY = 15 * 60 * 1000;
 
+/** @returns {Promise<import('../lib/news.js').NewsSettings>} */
 export async function readNewsSettings() {
   try {
     const stored = await api.storage.sync.get(NEWS_SETTINGS_KEY);
@@ -40,20 +52,28 @@ export async function readNewsSettings() {
   }
 }
 
+/** @param {unknown} settings */
 export async function writeNewsSettings(settings) {
   await api.storage.sync.set({ [NEWS_SETTINGS_KEY]: newsSettings(settings) });
 }
 
+/** @returns {Promise<NewsCache | null>} */
 async function readNewsCache() {
   const stored = await api.storage.local.get(NEWS_CACHE_KEY);
   return stored[NEWS_CACHE_KEY] ?? null;
 }
 
-/** The edition on file is this morning's, covering what Settings asks, and every subscribed repository has a place in it. */
+/**
+ * The edition on file is this morning's, covering what Settings asks, and every subscribed repository has a place in it.
+ * @param {NewsCache | null} cache
+ * @param {import('../lib/news.js').NewsSettings} settings
+ * @param {number} [at]
+ */
 function newsIsStale(cache, settings, at = Date.now()) {
   if (!isCurrentEdition(cache, settings, at)) return true;
+  const current = /** @type {NewsCache} */ (cache);
   return settings.repos.some((repo) => {
-    const part = cache.repos?.[repo.toLowerCase()];
+    const part = current.repos?.[repo.toLowerCase()];
     if (!part) return true;
     if (!part.error) return false;
     const failedAt = Date.parse(part.failedAt ?? '');
@@ -68,6 +88,11 @@ function newsIsStale(cache, settings, at = Date.now()) {
  * A rejection or a not-found moves on to the next; anything else is the answer. When every try
  * fails, the first token's reason is the one reported — "the token cannot see it" says more than
  * the anonymous not-found that follows it.
+ * @template T
+ * @param {import('./tokens.js').OpenToken[]} tokens
+ * @param {string | null} preferredId
+ * @param {(token: string | null) => Promise<T>} run
+ * @returns {Promise<{ result: T, tokenId: string | null }>}
  */
 async function withRepoToken(tokens, preferredId, run) {
   const ordered = [...tokens].sort((a, b) => Number(b.id === preferredId) - Number(a.id === preferredId));
@@ -87,6 +112,8 @@ async function withRepoToken(tokens, preferredId, run) {
  * One refresh in flight at a time, shared by whoever asked. Inside one edition a repository that
  * already answered is not asked again; a forced refresh — the button in Settings — asks everyone.
  * A repository that fails keeps whatever it had and records the sentence.
+ * @param {{ force?: boolean }} [options]
+ * @returns {Promise<NewsCache | null>}
  */
 export function refreshNews({ force = false } = {}) {
   // One under way works from the settings it started with: a repository subscribed since, or a
@@ -109,7 +136,9 @@ export function refreshNews({ force = false } = {}) {
     const window = editionWindow(at, settings.hour, previous, settings.days);
     const sameEdition = previous?.until === window.until && previous?.since === window.since;
     const tokens = await loadTokens();
+    /** @type {Record<string, NewsPart>} */
     const repos = {};
+    /** @type {(parts: Record<string, NewsPart>) => NewsCache} */
     const edition = (parts) => ({ since: window.since, until: window.until, hour: settings.hour, days: settings.days, fetchedAt: now(), repos: parts });
     for (const repo of settings.repos) {
       const key = repo.toLowerCase();
@@ -149,17 +178,20 @@ export function refreshNews({ force = false } = {}) {
  * draws what it is handed. `prose` is null for a repository the edition has not reached yet,
  * which is the menu's cue to draw skeletons; empty prose is a quiet day, or the failure that
  * stands where the day would be.
+ * @param {NewsCache | null} cache
+ * @param {import('../lib/news.js').NewsSettings} settings
+ * @returns {NewsSection[]}
  */
 function presentNews(cache, settings) {
   const window = cache?.since && cache?.until ? { since: cache.since, until: cache.until } : null;
   return settings.repos.map((repo) => {
-    const part = window ? cache.repos?.[repo.toLowerCase()] : null;
+    const part = window ? /** @type {NewsCache} */ (cache).repos?.[repo.toLowerCase()] : null;
     if (!part) return { repo, url: `https://github.com/${repo}`, private: false, prose: null, quiet: false, error: null };
     return {
       repo: part.repo || repo,
       url: part.url || `https://github.com/${repo}`,
       private: Boolean(part.private),
-      prose: proseFor(part, window),
+      prose: proseFor(part, /** @type {import('../lib/news.js').EditionWindow} */ (window)),
       quiet: !part.error && isQuiet(part),
       error: part.error ?? null,
     };
@@ -167,10 +199,37 @@ function presentNews(cache, settings) {
 }
 
 /**
+ * One repository's section of the edition as the menu draws it.
+ * @typedef {{
+ *   repo: string,
+ *   url: string,
+ *   private: boolean,
+ *   prose: import('../lib/news.js').Segment[] | null,
+ *   quiet: boolean,
+ *   error: string | null,
+ * }} NewsSection
+ */
+
+/**
+ * The edition as the menu and the settings card are told of it.
+ * @typedef {{
+ *   settings: import('../lib/news.js').NewsSettings,
+ *   show: boolean,
+ *   stale: boolean,
+ *   since: string,
+ *   until: string,
+ *   sinceLabel: string,
+ *   fetchedAt: string | null,
+ *   repos: NewsSection[],
+ * }} NewsState
+ */
+
+/**
  * Everything the menu and the settings card need in one answer. Only this morning's edition is
  * presented: yesterday's, still on file at nine, is skeletons and a refresh, not a stale page
  * under a header that says otherwise. `show` is the whole decision for the menu — off means no
  * column; on with nothing subscribed means a column the moment something is.
+ * @returns {Promise<NewsState>}
  */
 export async function newsState() {
   const [settings, cache] = await Promise.all([readNewsSettings(), readNewsCache()]);
@@ -204,6 +263,10 @@ export async function scheduleNews() {
   }
 }
 
+/**
+ * @param {string} repo
+ * @param {boolean} subscribe
+ */
 export async function subscribeNews(repo, subscribe) {
   const settings = await readNewsSettings();
   const repos = toggleRepo(settings, repo, subscribe);

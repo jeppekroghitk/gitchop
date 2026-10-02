@@ -58,6 +58,10 @@ function settings(spec) {
     target: TARGET,
     charset: 'utf8',
     loader: { '.css': 'text' },
+    // tsconfig.json is for the type checker alone. Left to find it, esbuild reads `strict` as
+    // alwaysStrict and puts "use strict" at the head of the content script, which the sources,
+    // modules with no such line, never asked for.
+    tsconfigRaw: {},
     banner: { js: `// gitchop: ${spec.entry} and what it imports, bundled by dev/build.mjs. The sources are in the repository.` },
     write: false,
     metafile: true,

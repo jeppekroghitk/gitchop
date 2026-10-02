@@ -62,6 +62,7 @@ function palette({ hue, tint }) {
   };
 }
 
+/** @param {{ reduced?: boolean, effects?: unknown }} [options] */
 export function createStage({ reduced = false, effects } = {}) {
   const fx = resolve(effects);
   // Switched off in Settings: no blade, no wound — the scrim and menu simply appear.

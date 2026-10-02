@@ -16,9 +16,14 @@ jobs:
           node-version: '22'
           cache: npm
 
-      # esbuild, for the bundles; package-lock.json pins it.
+      # esbuild, for the bundles, and TypeScript, for the type check; package-lock.json pins them.
       - name: Install the build's tools
         run: npm ci
+
+      # Nothing is compiled: tsc reads the JSDoc in the sources, so this is where a message the
+      # background has no handler for, or one missing a field its handler reads, is caught.
+      - name: Type check
+        run: npm run typecheck
 
       - name: Tests
         run: |

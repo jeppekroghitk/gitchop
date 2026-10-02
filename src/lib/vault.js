@@ -11,20 +11,24 @@
 const ALGO = 'AES-GCM';
 const IV_BYTES = 12;
 
+/** @param {Uint8Array} bytes */
 function toBase64(bytes) {
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);
 }
 
+/** @param {string} text */
 function fromBase64(text) {
   return Uint8Array.from(atob(text), (char) => char.charCodeAt(0));
 }
 
+/** @returns {string} */
 export function newVaultKey() {
   return toBase64(crypto.getRandomValues(new Uint8Array(32)));
 }
 
+/** @param {string} keyBase64 */
 async function importKey(keyBase64) {
   return crypto.subtle.importKey('raw', fromBase64(keyBase64), { name: ALGO, length: 256 }, false, [
     'encrypt',
@@ -32,6 +36,11 @@ async function importKey(keyBase64) {
   ]);
 }
 
+/**
+ * @param {string} secret
+ * @param {string} keyBase64
+ * @returns {Promise<string>}
+ */
 export async function seal(secret, keyBase64) {
   const key = await importKey(keyBase64);
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
@@ -39,6 +48,11 @@ export async function seal(secret, keyBase64) {
   return `${toBase64(iv)}.${toBase64(new Uint8Array(sealed))}`;
 }
 
+/**
+ * @param {string} blob
+ * @param {string} keyBase64
+ * @returns {Promise<string>}
+ */
 export async function unseal(blob, keyBase64) {
   const [ivPart, dataPart] = String(blob ?? '').split('.');
   if (!ivPart || !dataPart) throw new Error('Stored token is unreadable.');

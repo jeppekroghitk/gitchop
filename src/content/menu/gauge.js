@@ -11,6 +11,7 @@ import { gaugeRows } from './rows.js';
  * open, each repository search typed — sliding rather than jumping, which is why a bar that is
  * still there is kept and moved, not drawn again. The count-down ticks once a second while the
  * menu is up, and stops when it is gone.
+ * @param {import('../../background/messages.js').Answer<'gitchop:rate'> | null} rate
  */
 export function createGauge(rate) {
   const gauge = node('div', 'gc-gauge');

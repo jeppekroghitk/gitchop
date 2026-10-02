@@ -1,7 +1,12 @@
 /** The news column: a few sentences per subscribed repository, and what each fact is made of. */
-import { api, isSafeUrl } from '../../lib/links.js';
+import { isSafeUrl } from '../../lib/links.js';
+import { send } from '../../lib/messages.js';
 import { node } from '../dom.js';
 import { note, opensElsewhere, popLine, skeletons } from './parts.js';
+
+/** @import { Answer } from '../../background/messages.js' */
+/** @import { Chip, Segment } from '../../lib/news.js' */
+/** @import { Menu } from '../menu.js' */
 
 /** Skeleton rows standing in for a repository the edition has not reached yet. */
 const NEWS_SLOTS = 2;
@@ -12,6 +17,10 @@ const POP_BRIDGE = 6;
 /** How long a popover outlives the mouse leaving its chip — long enough to reach it diagonally. */
 const POP_LINGER = 120;
 
+/**
+ * @param {Menu} menu
+ * @param {Answer<'gitchop:news'> | null} news
+ */
 export function createNews(menu, news) {
   const { stage, newsEl, newsList, newsSince } = menu.el;
 
@@ -30,11 +39,15 @@ export function createNews(menu, news) {
   const newsPopCard = node('div', 'gc-pop-card');
   newsPop.append(newsPopCard);
   newsEl?.append(newsPop);
+  /** @type {{ item: HTMLElement, entry: ReturnType<typeof chipEntry> } | null} */
   let newsHover = null;
   let newsPopHovered = false;
+  /** @type {number | null} */
   let newsPopTimer = null;
+  /** @type {{ item: HTMLElement, chip: Chip } | null} */
   let newsShown = null;
 
+  /** @type {Answer<'gitchop:news'> | null} */
   let newsData = news ?? null;
   let newsRun = 0;
   let newsBusy = false;
@@ -48,7 +61,10 @@ export function createNews(menu, news) {
     newsPop.setAttribute('aria-hidden', 'true');
   }
 
-  /** Every line the fact is made of; only a fetch that stopped short ends with a line pointing at GitHub. */
+  /**
+   * Every line the fact is made of; only a fetch that stopped short ends with a line pointing at GitHub.
+   * @param {Chip} chip
+   */
   function fillNewsPop(chip) {
     newsPopCard.textContent = '';
     for (const item of chip.items ?? []) newsPopCard.append(popLine(item.title, item.detail, item.url, { dismiss: menu.dismiss }));
@@ -60,6 +76,8 @@ export function createNews(menu, news) {
    * column's text, and no taller than about twenty lines or the room the column has left
    * beneath, whichever is less, so a long list scrolls inside the card rather than running off
    * the column. Above only when beneath is not enough and above has more.
+   * @param {HTMLElement | null} chipEl
+   * @param {Chip | null} chip
    */
   function newsPopAt(chipEl, chip) {
     if (!chipEl || !chip || (chip.items?.length ?? 0) === 0) {
@@ -75,14 +93,14 @@ export function createNews(menu, news) {
     }
     newsShown = { item: chipEl, chip };
     chipEl.dataset.open = 'true';
-    const box = newsEl.getBoundingClientRect();
+    const box = /** @type {HTMLElement} */ (newsEl).getBoundingClientRect();
     const at = chipEl.getBoundingClientRect();
     const left = 13;
     newsPop.style.left = `${left}px`;
     newsPop.style.width = `${Math.round(box.width - left - 15)}px`;
     newsPopCard.style.maxHeight = '';
     const natural = newsPopCard.offsetHeight;
-    const line = newsPopCard.firstElementChild?.offsetHeight || 25;
+    const line = /** @type {HTMLElement | null} */ (newsPopCard.firstElementChild)?.offsetHeight || 25;
     const roomBelow = box.height - 6 - (at.bottom - box.top) - POP_BRIDGE;
     const roomAbove = at.top - box.top - 6 - POP_BRIDGE;
     const below = natural <= roomBelow || roomBelow >= roomAbove;
@@ -129,11 +147,16 @@ export function createNews(menu, news) {
   // The chip it hangs from has moved; where to is not worth working out.
   newsList?.addEventListener('scroll', hideNewsPop, { passive: true });
 
+  /** @param {string} repo */
   function subscribed(repo) {
     return (newsData?.settings?.repos ?? []).some((seen) => seen.toLowerCase() === String(repo).toLowerCase());
   }
 
-  /** The subscribe row for one repository — inside it, or as a command when standing on its page. */
+  /**
+   * The subscribe row for one repository — inside it, or as a command when standing on its page.
+   * @param {string} repo
+   * @param {string} [label]
+   */
   function subscribeEntry(repo, label) {
     const on = subscribed(repo);
     return {
@@ -153,6 +176,7 @@ export function createNews(menu, news) {
    * A fact in the prose. The chip is what the mouse hovers and clicks — the click opens GitHub's
    * own list of exactly that, cut to the window — and the popover is what it is made of. Same
    * gate as every other row: nothing becomes a link without passing the scheme check.
+   * @param {Segment & { chip: Chip }} segment
    */
   function chipEntry(segment) {
     return {
@@ -164,9 +188,10 @@ export function createNews(menu, news) {
     };
   }
 
+  /** @param {ReturnType<typeof chipEntry>} entry */
   function newsChip(entry) {
     const item = node(entry.usable ? 'a' : 'span', 'gc-chip', entry.text);
-    if (entry.usable) item.href = entry.url;
+    if (entry.usable) /** @type {HTMLAnchorElement} */ (item).href = entry.url;
     item.dataset.kind = entry.kind;
 
     item.addEventListener('mouseenter', () => {
@@ -184,18 +209,22 @@ export function createNews(menu, news) {
     return item;
   }
 
-  /** One repository's sentences: plain text and chips, in the order the prose puts them. */
+  /**
+   * One repository's sentences: plain text and chips, in the order the prose puts them.
+   * @param {Segment[]} segments
+   */
   function proseRow(segments) {
     const row = node('li', 'gc-prose-row');
     const prose = node('p', 'gc-prose');
     for (const segment of segments) {
-      if (segment.chip) prose.append(newsChip(chipEntry(segment)));
+      if (segment.chip) prose.append(newsChip(chipEntry(/** @type {Segment & { chip: Chip }} */ (segment))));
       else prose.append(document.createTextNode(segment.text));
     }
     row.append(prose);
     return row;
   }
 
+  /** @param {{ repo: string, private: boolean }} entry */
   function repoSection(entry) {
     const row = node('li', 'gc-section gc-section--lane gc-section--repo');
     const name = node('span', null, entry.repo);
@@ -213,11 +242,12 @@ export function createNews(menu, news) {
    * lets it go.
    */
   function renderNews() {
-    if (!newsEl) return;
+    if (!newsEl || !newsList || !newsSince) return;
     newsList.textContent = '';
     newsHover = null;
     hideNewsPop();
 
+    /** @type {Partial<Answer<'gitchop:news'>>} */
     const data = newsData ?? {};
     const repos = data.repos ?? [];
     stage.dataset.news = String(repos.length > 0);
@@ -247,9 +277,10 @@ export function createNews(menu, news) {
   async function refreshNews() {
     if (!newsEl || !newsData?.stale) return;
     const run = ++newsRun;
+    /** @type {Answer<'gitchop:news:refresh'> | null} */
     let next = null;
     try {
-      const response = await api.runtime.sendMessage({ type: 'gitchop:news:refresh' });
+      const response = await send({ type: 'gitchop:news:refresh' });
       if (response?.ok) next = response;
     } catch {
       /* keep what is already on screen */
@@ -264,14 +295,17 @@ export function createNews(menu, news) {
    * whole state, so the drill row flips, the command under Do flips, and the column gains or
    * loses a section in one repaint. A new repository then has no place in the edition yet, so
    * the refresh that follows fills it in.
+   * @param {string} repo
+   * @param {boolean} subscribe
    */
   async function toggleNews(repo, subscribe) {
     if (newsBusy) return;
     newsBusy = true;
     const run = ++newsRun;
+    /** @type {Answer<'gitchop:news:subscribe'> | null} */
     let next = null;
     try {
-      const response = await api.runtime.sendMessage({ type: subscribe ? 'gitchop:news:subscribe' : 'gitchop:news:unsubscribe', repo });
+      const response = await send({ type: subscribe ? 'gitchop:news:subscribe' : 'gitchop:news:unsubscribe', repo });
       if (response?.ok) next = response;
     } catch {
       /* the list stays as it was */
@@ -291,7 +325,10 @@ export function createNews(menu, news) {
     subscribeEntry,
     render: renderNews,
     refresh: refreshNews,
-    /** A whole new edition from the background; it has nothing to merge, so it is simply painted. */
+    /**
+     * A whole new edition from the background; it has nothing to merge, so it is simply painted.
+     * @param {Answer<'gitchop:news'>} next
+     */
     update(next) {
       newsData = next;
       renderNews();

@@ -7,6 +7,12 @@ import { loadTokens, storeTokens } from './tokens.js';
 
 /** The local index of every repository the tokens can reach, which the menu searches on every settle. */
 
+/**
+ * The index as storage.local holds it. `failures` is one sentence per token that could not list.
+ * @typedef {{ repos: import('../lib/repos.js').Repo[], builtAt: string | null, failures: string[] }} RepoIndex
+ */
+
+/** @returns {Promise<RepoIndex>} */
 export async function readIndex() {
   const stored = await api.storage.local.get(INDEX_KEY);
   return stored[INDEX_KEY] ?? { repos: [], builtAt: null, failures: [] };
@@ -20,7 +26,9 @@ export async function buildIndex() {
   const tokens = await loadTokens();
   if (tokens.length === 0) throw new Error('Add a token first.');
 
+  /** @type {Map<string, import('../lib/repos.js').Repo>} */
   const seen = new Map();
+  /** @type {string[]} */
   const failures = [];
   for (const entry of tokens) {
     try {
@@ -54,7 +62,23 @@ export async function buildIndex() {
   return indexState(index);
 }
 
+/**
+ * The index as the settings page is told of it: how much it holds and whose, never the repositories.
+ * @typedef {{
+ *   count: number,
+ *   privateCount: number,
+ *   owners: { owner: string, count: number }[],
+ *   failures: string[],
+ *   builtAt: string | null,
+ * }} IndexState
+ */
+
+/**
+ * @param {RepoIndex} index
+ * @returns {IndexState}
+ */
 export function indexState(index) {
+  /** @type {Map<string, number>} */
   const tally = new Map();
   for (const repo of index.repos) {
     const owner = repo.fullName.slice(0, repo.fullName.indexOf('/'));

@@ -6,6 +6,7 @@ function defaultLabel() {
   return document.title.replace(/\s*[·|—-]\s*GitHub\s*$/i, '').trim().slice(0, 80);
 }
 
+/** @param {import('../menu.js').Menu} menu */
 export function createForm(menu) {
   const { state } = menu;
   const { panel, filter, list } = menu.el;

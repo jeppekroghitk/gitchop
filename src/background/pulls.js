@@ -24,9 +24,11 @@ const PULLS_EVERY_MINUTES = 5;
  * menu paints the snapshot first and the answer after, so what left between the two is seen to
  * leave. Every token contributes, since a fine-grained one
  * sees a single owner; the answers are merged by URL.
+ * @type {Promise<import('./pulls-store.js').PullsCache | null> | null}
  */
 let pullsRefresh = null;
 
+/** @param {import('./pulls-store.js').PullsCache | null} cache */
 function pullsAreStale(cache) {
   if (!cache?.fetchedAt) return true;
   return Date.now() - new Date(cache.fetchedAt).valueOf() > PULLS_FRESH;
@@ -44,7 +46,9 @@ export function refreshPulls() {
     const settings = await readPullsSettings();
     const previous = await readPullsCache();
 
+    /** @type {import('../lib/pulls.js').Lanes[]} */
     const results = [];
+    /** @type {string[]} */
     const failures = [];
     for (const entry of tokens) {
       try {
@@ -54,6 +58,7 @@ export function refreshPulls() {
       }
     }
 
+    /** @type {import('./pulls-store.js').PullsCache} */
     let next;
     if (results.length === 0) {
       next = { ...(previous ?? { lanes: null, fetchedAt: null }), error: failures[0] ?? 'GitHub did not answer.', failedAt: now() };
@@ -81,6 +86,8 @@ export function refreshPulls() {
  * a classic content script and cannot import the module that defines them. `pulls` is null until a
  * snapshot exists, which is the menu's cue to draw skeletons. Ages are worked out here, the one
  * place that knows the clock.
+ * @param {import('./pulls-store.js').PullsCache | null} cache
+ * @returns {PresentedLane[]}
  */
 function presentLanes(cache) {
   const at = Date.now();
@@ -95,8 +102,33 @@ function presentLanes(cache) {
 }
 
 /**
+ * One lane as the menu draws it: the lane's own description, how many GitHub says it holds, and its
+ * pull requests each with its age — both null until a snapshot exists.
+ * @typedef {(typeof LANES)[number] & {
+ *   total: number | null,
+ *   pulls: (import('../lib/pulls.js').Pull & { age: string })[] | null,
+ * }} PresentedLane
+ */
+
+/**
+ * The pull requests as the menu and the settings card are told of them.
+ * @typedef {{
+ *   settings: import('../lib/pulls.js').PullsSettings,
+ *   hasToken: boolean,
+ *   show: boolean,
+ *   stale: boolean,
+ *   fetchedAt: string | null,
+ *   fetchedAgo: string,
+ *   error: string | null,
+ *   partial: string | null,
+ *   lanes: PresentedLane[],
+ * }} PullsState
+ */
+
+/**
  * Everything the menu and the settings card need in one answer. `show` is the whole decision for
  * the menu: no token or switched off means no column at all, not an empty one asking for a token.
+ * @returns {Promise<PullsState>}
  */
 export async function pullsState() {
   const [settings, config, cache] = await Promise.all([readPullsSettings(), readConfig(), readPullsCache()]);

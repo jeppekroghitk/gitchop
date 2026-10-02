@@ -15,12 +15,17 @@ import { loadTokens } from './tokens.js';
 const PUSH_DELAY = 1500;
 const MAX_LINKS = 200;
 
+/** @type {number | null} */
 let pushTimer = null;
+/** @type {string | null} */
 let inStep = null;
 
 /**
  * Only one of the tokens will hold the Gists permission, and a fine-grained token cannot be asked
  * what it can do. So try them, remember the one that worked, and start with it next time.
+ * @template T
+ * @param {(token: string) => Promise<T>} run
+ * @returns {Promise<T>}
  */
 async function withGistToken(run) {
   const config = await readConfig();
@@ -43,6 +48,7 @@ async function withGistToken(run) {
   throw failure ?? new Error('No saved token could reach the gist.');
 }
 
+/** @param {unknown} raw */
 function sanitizeLinks(raw) {
   return (Array.isArray(raw) ? raw : [])
     .filter((link) => link && typeof link === 'object')
@@ -58,6 +64,7 @@ function sanitizeLinks(raw) {
  * link that is not http(s) is dropped rather than stored, the list is capped, a switch is on or
  * off, a slider of the chop's is a whole number on its own scale, a repository is a well-formed
  * name. The same functions read the local copy, so the two compare as equals when they are.
+ * @type {Record<string, (raw: unknown) => unknown>}
  */
 const BACKED_UP = {
   [LINKS_KEY]: sanitizeLinks,
@@ -68,9 +75,13 @@ const BACKED_UP = {
   [EFFECTS_KEY]: sanitizeEffects,
 };
 
-/** The local copy as the gist would hold it, keys in one fixed order so two snapshots compare as text. */
+/**
+ * The local copy as the gist would hold it, keys in one fixed order so two snapshots compare as text.
+ * @returns {Promise<Record<string, any>>}
+ */
 async function loadBackup() {
   const stored = await api.storage.sync.get(Object.keys(BACKED_UP));
+  /** @type {Record<string, unknown>} */
   const backup = {};
   for (const [key, clean] of Object.entries(BACKED_UP)) backup[key] = clean(stored[key]);
   return backup;
@@ -81,8 +92,11 @@ async function loadBackup() {
  * the remote carries are written — a gist from before the settings joined the links has only links,
  * and the settings here are left as they are — and only the keys the table knows, whatever else the
  * file says. What lands is the merged whole, remembered as the snapshot in step with the gist.
+ * @param {Record<string, unknown>} remote
+ * @returns {Promise<Record<string, any>>}
  */
 async function applyRemote(remote) {
+  /** @type {Record<string, unknown>} */
   const next = {};
   for (const [key, clean] of Object.entries(BACKED_UP)) {
     if (key in remote) next[key] = clean(remote[key]);
@@ -93,11 +107,18 @@ async function applyRemote(remote) {
   return merged;
 }
 
-/** The gist as one flat object under storage keys, the links foremost, whatever shape the file had. */
+/**
+ * The gist as one flat object under storage keys, the links foremost, whatever shape the file had.
+ * @param {import('../lib/gist.js').Store} store
+ */
 function flatten(store) {
   return { ...store.settings, [LINKS_KEY]: store.links };
 }
 
+/**
+ * @param {{ force?: boolean }} [options]
+ * @returns {Promise<{ skipped?: boolean, changed?: boolean }>}
+ */
 export async function push({ force = false } = {}) {
   const config = await readConfig();
   if (config.tokens.length === 0 || !config.gistId) return { skipped: true };
@@ -110,7 +131,8 @@ export async function push({ force = false } = {}) {
   }
 
   try {
-    await withGistToken((token) => writeStore(token, config.gistId, backup));
+    const gistId = config.gistId;
+    await withGistToken((token) => writeStore(token, gistId, backup));
   } catch (error) {
     await writeConfig({ lastError: String(error.message ?? error) });
     throw error;
@@ -124,11 +146,16 @@ export async function push({ force = false } = {}) {
  * A gist written before the settings joined the links holds none. Once its links are in, the whole
  * is written back, so the next profile to pull gets the settings too — forced, because what is
  * local is exactly what was just applied and would otherwise count as already current.
+ * @param {import('../lib/gist.js').Store} store
  */
 function upgradeStore(store) {
   if (store.format < 2) push({ force: true }).catch(() => {});
 }
 
+/**
+ * @param {{ force?: boolean }} [options]
+ * @returns {Promise<{ skipped?: boolean, pushedInstead?: boolean, changed?: boolean, count?: number }>}
+ */
 export async function pull({ force = false } = {}) {
   const config = await readConfig();
   if (config.tokens.length === 0 || !config.gistId) return { skipped: true };
@@ -141,7 +168,8 @@ export async function pull({ force = false } = {}) {
 
   let remote;
   try {
-    remote = await withGistToken((token) => readStore(token, config.gistId));
+    const gistId = config.gistId;
+    remote = await withGistToken((token) => readStore(token, gistId));
   } catch (error) {
     await writeConfig({ lastError: String(error.message ?? error) });
     throw error;
@@ -154,13 +182,16 @@ export async function pull({ force = false } = {}) {
   return { changed: JSON.stringify(applied) !== before, count: applied[LINKS_KEY].length };
 }
 
+/** @param {{ gistId?: string }} request */
 export async function connectGist({ gistId }) {
   const config = await readConfig();
   if (config.tokens.length === 0) throw new Error('Add a token first.');
   const wanted = String(gistId ?? '').trim();
 
   let id = wanted;
+  /** @type {Record<string, any>} */
   let remote;
+  /** @type {import('../lib/gist.js').Store | null} */
   let adopted = null;
   if (id) {
     adopted = await withGistToken((token) => readStore(token, id));
@@ -183,7 +214,11 @@ export async function stopBackup() {
   return state();
 }
 
-/** The storage.onChanged half that belongs to the backup: mark the copy dirty and push a beat later. */
+/**
+ * The storage.onChanged half that belongs to the backup: mark the copy dirty and push a beat later.
+ * @param {{ [key: string]: WebExt.StorageChange }} changes
+ * @param {WebExt.AreaName} area
+ */
 export function noteBackedUpChange(changes, area) {
   // Any key the gist holds: a link edited, a switch flipped, a repository subscribed from the menu.
   // A pull landing reads back as the snapshot already in step, and is not bounced out again.

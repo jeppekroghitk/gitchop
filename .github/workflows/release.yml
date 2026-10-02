@@ -26,9 +26,12 @@ jobs:
           node-version: '22'
           cache: npm
 
-      # esbuild, for the bundles; package-lock.json pins it.
+      # esbuild, for the bundles, and TypeScript, for the type check; package-lock.json pins them.
       - name: Install the build's tools
         run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
 
       - name: Tests
         run: |

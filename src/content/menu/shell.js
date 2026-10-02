@@ -5,6 +5,17 @@
 import { node } from '../dom.js';
 import { standsPanel } from './rows.js';
 
+/** @import { Answer } from '../../background/messages.js' */
+
+/**
+ * @param {{
+ *   panelSetting: Answer<'gitchop:panel'> | null,
+ *   pulls: Answer<'gitchop:pulls'> | null,
+ *   news: Answer<'gitchop:news'> | null,
+ *   count: ReturnType<typeof import('./count.js').createCount>['view'],
+ *   onOptions: () => void,
+ * }} parts
+ */
 export function createShell({ panelSetting, pulls, news, count, onOptions }) {
   const hasPanel = standsPanel(panelSetting, pulls, news);
   const panel = node('div', 'gc-panel');
@@ -50,8 +61,11 @@ export function createShell({ panelSetting, pulls, news, count, onOptions }) {
   // The news column is in the tree whenever the feature is on, and in the layout only while
   // something is subscribed — so the first subscription made from the menu raises it at once,
   // and the last unsubscription lets it go, without the menu being reopened.
+  /** @type {HTMLElement | null} */
   let newsEl = null;
+  /** @type {HTMLUListElement | null} */
   let newsList = null;
+  /** @type {HTMLSpanElement | null} */
   let newsSince = null;
   if (news?.show) {
     newsEl = node('aside', 'gc-news');
@@ -67,7 +81,9 @@ export function createShell({ panelSetting, pulls, news, count, onOptions }) {
     stage.prepend(newsEl);
   }
 
+  /** @type {HTMLElement | null} */
   let pullsEl = null;
+  /** @type {HTMLUListElement | null} */
   let pullsList = null;
   if (pulls?.show) {
     pullsEl = node('aside', 'gc-pulls');
@@ -104,7 +120,8 @@ export function createShell({ panelSetting, pulls, news, count, onOptions }) {
    * cut the fact short.
    */
   if (!hasPanel) {
-    const host = pullsEl ?? newsEl;
+    // standsPanel keeps the panel whenever neither column stands, so one of the two is here.
+    const host = /** @type {HTMLElement} */ (pullsEl ?? newsEl);
     const tool = node('button', 'gc-tool', 'settings');
     tool.type = 'button';
     tool.title = 'Open Settings';

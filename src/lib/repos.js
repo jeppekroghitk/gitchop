@@ -2,6 +2,12 @@ const API = 'https://api.github.com';
 const SLASHED = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
 
 /**
+ * A repository as the search and the local index hold it — an entry of the index is one of these.
+ * `owned` is whether it came from your own tokens or a favoured owner rather than all of GitHub.
+ * @typedef {{ fullName: string, url: string, description: string, private: boolean, archived: boolean, owned: boolean }} Repo
+ */
+
+/**
  * How many repositories a search lists. It is the page each search asks for, not a count of
  * requests: a bare word is two searches whatever the number, an owner/repository one lookup, and
  * the index none — so ten costs GitHub nothing more than five did. The menu's slots match it.
@@ -17,6 +23,11 @@ export const NOT_OWNERS = new Set([
   'security', 'sessions', 'settings', 'sponsors', 'stars', 'topics', 'trending', 'watching',
 ]);
 
+/**
+ * @param {any} repo
+ * @param {boolean} owned
+ * @returns {Repo}
+ */
 function shape(repo, owned) {
   return {
     fullName: repo.full_name,
@@ -28,6 +39,11 @@ function shape(repo, owned) {
   };
 }
 
+/**
+ * @param {string} path
+ * @param {string | null | undefined} token
+ * @returns {Promise<{ ok: boolean, status: number, body: any }>}
+ */
 async function get(path, token) {
   const response = await fetch(`${API}${path}`, {
     headers: {
@@ -39,6 +55,13 @@ async function get(path, token) {
   return { ok: response.ok, status: response.status, body: response.ok ? await response.json() : null };
 }
 
+/**
+ * @param {string} term
+ * @param {string | null | undefined} token
+ * @param {number} limit
+ * @param {boolean} [owned]
+ * @returns {Promise<Repo[]>}
+ */
 async function search(term, token, limit, owned = false) {
   const found = await get(`/search/repositories?q=${encodeURIComponent(term)}&per_page=${limit}`, token);
   if (found.ok) return (found.body.items ?? []).map((repo) => shape(repo, owned));
@@ -56,8 +79,11 @@ async function search(term, token, limit, owned = false) {
  * Accounts worth favouring, read straight off the saved links: anything linked at
  * github.com/<owner> or github.com/<owner>/<repo>. Links kept in the menu are a good signal
  * of whose repositories matter, and the order is the order they were put in.
+ * @param {({ url?: string } | null)[] | null | undefined} links
+ * @returns {string[]}
  */
 export function ownersFromLinks(links) {
+  /** @type {string[]} */
   const owners = [];
   for (const link of links ?? []) {
     const match = OWNER_IN_URL.exec(link?.url ?? '');
@@ -74,8 +100,14 @@ export function ownersFromLinks(links) {
  * actually work in match instantly and without a request — GitHub's search cannot be relied on to
  * surface private repositories, and asking it on every keystroke is a poor trade when the list of
  * repositories you care about changes a few times a month.
+ * @param {string} token
+ * @param {number} [pages]
+ * @param {number} [perPage]
+ * @param {'all' | 'public' | 'private' | null} [visibility]
+ * @returns {Promise<Repo[]>}
  */
 export async function listAccessibleRepos(token, pages = 6, perPage = 100, visibility = null) {
+  /** @type {Repo[]} */
   const all = [];
   for (let page = 1; page <= pages; page += 1) {
     const only = visibility ? `&visibility=${visibility}` : '';
@@ -101,8 +133,11 @@ export async function listAccessibleRepos(token, pages = 6, perPage = 100, visib
  * nothing about a token: every token on GitHub can list those, whoever it was made for, so a token
  * an organisation has yet to approve lists the public half of every organisation the account belongs
  * to. The private repositories are the grant itself.
+ * @param {({ private?: boolean, fullName?: string } | null)[] | null | undefined} repos
+ * @returns {string[]}
  */
 export function privateOwnersOf(repos) {
+  /** @type {string[]} */
   const owners = [];
   for (const repo of repos ?? []) {
     if (!repo?.private) continue;
@@ -119,16 +154,26 @@ export function privateOwnersOf(repos) {
  * Who a token speaks for. A fine-grained token has exactly one resource owner and GitHub never says
  * which, so it is read off the private repositories the token lists; one page names it. An empty
  * answer is itself news: nothing selected, or an organisation that has yet to approve the token.
+ * @param {string} token
+ * @returns {Promise<string[]>}
  */
 export async function ownersReachable(token) {
   return privateOwnersOf(await listAccessibleRepos(token, 1, 100, 'private'));
 }
 
-/** Exact name, then prefix, then substring; shorter names win ties. */
+/**
+ * Exact name, then prefix, then substring; shorter names win ties.
+ * @template {{ fullName: string }} R
+ * @param {R[] | null | undefined} index
+ * @param {unknown} query
+ * @param {number} [limit]
+ * @returns {R[]}
+ */
 export function matchIndex(index, query, limit = REPO_LIMIT) {
   const needle = String(query ?? '').trim().toLowerCase();
   if (needle.length < 2) return [];
 
+  /** @type {[number, R][]} */
   const ranked = [];
   for (const repo of index ?? []) {
     const full = repo.fullName.toLowerCase();
@@ -147,8 +192,13 @@ export function matchIndex(index, query, limit = REPO_LIMIT) {
   return ranked.slice(0, limit).map(([, repo]) => repo);
 }
 
+/**
+ * @param {Repo[][]} groups
+ * @param {number} limit
+ */
 function merge(groups, limit) {
   const seen = new Set();
+  /** @type {Repo[]} */
   const merged = [];
   for (const group of groups) {
     for (const repo of group) {
@@ -167,6 +217,11 @@ function merge(groups, limit) {
  * restricted to the favoured owners, one across GitHub, with the restricted hits kept first.
  * Searching "economics" while itk-dev is in the links should not bury itk-dev/economics under
  * every other project of that name.
+ * @param {unknown} query
+ * @param {string | null | undefined} token
+ * @param {string[]} [owners]
+ * @param {number} [limit]
+ * @returns {Promise<Repo[]>}
  */
 export async function findRepos(query, token, owners = [], limit = REPO_LIMIT) {
   const trimmed = String(query ?? '')
@@ -175,6 +230,7 @@ export async function findRepos(query, token, owners = [], limit = REPO_LIMIT) {
     .replace(/\/+$/, '');
   if (trimmed.length < 2) return [];
 
+  /** @type {(name: string) => boolean} */
   const favoured = (name) => owners.some((owner) => owner.toLowerCase() === name.toLowerCase());
 
   if (SLASHED.test(trimmed)) {

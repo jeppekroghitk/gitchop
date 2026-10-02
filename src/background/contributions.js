@@ -15,9 +15,24 @@ const CONTRIB_FRESH = 5 * 60 * 1000;
  * nothing outside the menu shows them, so nothing needs them fresh before the key is pressed.
  * Every token is asked, since a fine-grained one sees a single owner's repositories and counts
  * accordingly, and the highest count for this year is kept, its past years with it.
+ * The year's count as last fetched, and the whole years before it. A refresh that failed keeps the
+ * last good count and says why in `error`; one where only some tokens answered, in `partial`.
+ * @typedef {{
+ *   year: number,
+ *   total: number | null,
+ *   login: string | null,
+ *   years: { year: number, total: number }[],
+ *   fetchedAt: string | null,
+ *   error?: string | null,
+ *   failedAt?: string | null,
+ *   partial?: string | null,
+ * }} ContribCache
  */
+
+/** @type {Promise<ContribCache | null> | null} */
 let contribRefresh = null;
 
+/** @returns {Promise<import('../lib/contributions.js').ContribSettings>} */
 export async function readContribSettings() {
   try {
     const stored = await api.storage.sync.get(CONTRIB_SETTINGS_KEY);
@@ -27,11 +42,16 @@ export async function readContribSettings() {
   }
 }
 
+/** @returns {Promise<ContribCache | null>} */
 async function readContribCache() {
   const stored = await api.storage.local.get(CONTRIB_CACHE_KEY);
   return stored[CONTRIB_CACHE_KEY] ?? null;
 }
 
+/**
+ * @param {ContribCache | null} cache
+ * @param {number} [at]
+ */
 function contribIsStale(cache, at = Date.now()) {
   if (!cache?.fetchedAt || cache.year !== yearWindow(at).year) return true;
   return at - new Date(cache.fetchedAt).valueOf() > CONTRIB_FRESH;
@@ -50,7 +70,9 @@ export function refreshContributions() {
     const previous = await readContribCache();
     const windows = yearWindows();
 
+    /** @type {import('../lib/contributions.js').Contributions[]} */
     const results = [];
+    /** @type {string[]} */
     const failures = [];
     for (const entry of tokens) {
       try {
@@ -61,6 +83,7 @@ export function refreshContributions() {
     }
 
     const best = bestOf(results);
+    /** @type {ContribCache} */
     let next;
     if (!best) {
       next = {
@@ -89,11 +112,30 @@ export function refreshContributions() {
 }
 
 /**
+ * The year's count as the menu and the settings card are told of it.
+ * @typedef {{
+ *   settings: import('../lib/contributions.js').ContribSettings,
+ *   hasToken: boolean,
+ *   show: boolean,
+ *   stale: boolean,
+ *   year: number,
+ *   total: number | null,
+ *   past: { year: number, total: number }[],
+ *   login: string | null,
+ *   fetchedAt: string | null,
+ *   fetchedAgo: string,
+ *   error: string | null,
+ *   partial: string | null,
+ * }} ContribState
+ */
+
+/**
  * Everything the menu and the settings card need in one answer. `show` is the whole decision for
  * the menu: no token or switched off means no number, not a shimmer asking for a token. Only a
  * snapshot of this year is presented — last year's count under this year's label would be wrong,
  * so on New Year's Day it is a shimmer and a refresh. `past` is the whole years before this one,
  * newest first, for the hover.
+ * @returns {Promise<ContribState>}
  */
 export async function contributionsState() {
   const [settings, config, cache] = await Promise.all([readContribSettings(), readConfig(), readContribCache()]);
@@ -107,7 +149,7 @@ export async function contributionsState() {
     show: hasToken && settings.enabled === 1,
     stale: contribIsStale(cache, at),
     year,
-    total: Number.isFinite(current?.total) ? current.total : null,
+    total: Number.isFinite(current?.total) ? /** @type {ContribCache} */ (current).total : null,
     past: (current?.years ?? [])
       .filter((entry) => Number.isFinite(entry?.total) && Number.isInteger(entry?.year) && entry.year < year)
       .map((entry) => ({ year: entry.year, total: entry.total })),

@@ -1,6 +1,9 @@
 import { tokenLabel } from '../lib/gist.js';
 import { api } from '../lib/links.js';
+import { send } from '../lib/messages.js';
 import { tokenGate, tokenState } from './pages.js';
+
+/** @import { Answer, Message, MessageType } from '../background/messages.js' */
 
 const TOKEN_CLASSIC = 'https://github.com/settings/tokens/new?scopes=repo,gist&description=gitchop';
 const TOKEN_FINE = 'https://github.com/settings/personal-access-tokens/new';
@@ -28,18 +31,23 @@ function fineTokenUrl(owner) {
   return `${TOKEN_FINE}?${params}`;
 }
 
-const tokenHost = document.getElementById('sync');
-const backupHost = document.getElementById('backup');
+const tokenHost = /** @type {HTMLElement} */ (document.getElementById('sync'));
+const backupHost = /** @type {HTMLElement} */ (document.getElementById('backup'));
 /** Under each card: the cautions, the fine print, and what the backup would take. */
-const tokenNotes = document.getElementById('token-notes');
-const backupNotes = document.getElementById('backup-notes');
+const tokenNotes = /** @type {HTMLElement} */ (document.getElementById('token-notes'));
+const backupNotes = /** @type {HTMLElement} */ (document.getElementById('backup-notes'));
 
 let busy = false;
+/** @type {Answer<'gitchop:sync:state'> | null} */
 let current = null;
 let onTokenChange = () => {};
 
-/** Each card has its own status corner, so a saved token and a pushed gist do not fight over one. */
+/**
+ * Each card has its own status corner, so a saved token and a pushed gist do not fight over one.
+ * @param {HTMLElement} node
+ */
 function flasher(node) {
+  /** @type {number | null} */
   let timer = null;
   return (text) => {
     node.textContent = text;
@@ -52,8 +60,8 @@ function flasher(node) {
 }
 
 const flash = {
-  token: flasher(document.getElementById('sync-status')),
-  backup: flasher(document.getElementById('backup-status')),
+  token: flasher(/** @type {HTMLElement} */ (document.getElementById('sync-status'))),
+  backup: flasher(/** @type {HTMLElement} */ (document.getElementById('backup-status'))),
 };
 
 /**
@@ -71,8 +79,13 @@ async function consent(types) {
   }
 }
 
+/**
+ * @template {MessageType} T
+ * @param {Message<T>} message
+ * @returns {Promise<Answer<T>>}
+ */
 async function ask(message) {
-  const response = await api.runtime.sendMessage(message);
+  const response = await send(message);
   if (!response?.ok) throw new Error(response?.error ?? 'The background script did not answer.');
   return response;
 }

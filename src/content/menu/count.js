@@ -1,9 +1,12 @@
 /** The year's contributions in the head, and the years before it hung beneath on hover. */
-import { api } from '../../lib/links.js';
+import { send } from '../../lib/messages.js';
 import { node } from '../dom.js';
 import { createOdometer } from '../odometer.js';
 import { popLine } from './parts.js';
 
+/** @import { Answer } from '../../background/messages.js' */
+
+/** @param {Answer<'gitchop:contributions'> | null} contributions */
 export function createCount(contributions) {
   /**
    * The year's contributions beside the title, when the background said so — a token, and the
@@ -11,6 +14,15 @@ export function createCount(contributions) {
    * that reads it, this year's and the past ones both. It is not a link: hovering it hangs the
    * years before this one beneath, and that is all it does. Where it hangs is the frame's to
    * say, which sets `home` on it.
+   * @type {{
+   *   element: HTMLSpanElement,
+   *   odometer: ReturnType<typeof createOdometer>,
+   *   label: HTMLSpanElement,
+   *   pop: HTMLDivElement,
+   *   years: HTMLDivElement,
+   *   past: { year: number, total: number }[],
+   *   home?: HTMLElement | null,
+   * } | null}
    */
   let count = null;
   if (contributions?.show) {
@@ -33,6 +45,7 @@ export function createCount(contributions) {
     count = { element, odometer, label, pop, years, past: [] };
   }
 
+  /** @type {Partial<Answer<'gitchop:contributions'>> | null} */
   let contribData = contributions ?? null;
   let contribRun = 0;
 
@@ -50,7 +63,7 @@ export function createCount(contributions) {
    */
   function showYears() {
     if (!count || count.past.length === 0 || count.element.hidden) return;
-    const box = count.home.getBoundingClientRect();
+    const box = /** @type {HTMLElement} */ (count.home).getBoundingClientRect();
     const at = count.element.getBoundingClientRect();
     count.pop.style.right = `${Math.round(box.right - at.right)}px`;
     count.pop.style.top = `${Math.round(at.bottom - box.top)}px`;
@@ -92,7 +105,7 @@ export function createCount(contributions) {
       return;
     }
     const spoken = [
-      `${data.total.toLocaleString('en')} contributions in ${year}`,
+      `${/** @type {number} */ (data.total).toLocaleString('en')} contributions in ${year}`,
       ...count.past.map((entry) => `${entry.total.toLocaleString('en')} in ${entry.year}`),
     ];
     count.element.setAttribute('aria-label', spoken.join('; '));
@@ -106,9 +119,10 @@ export function createCount(contributions) {
   async function refreshCount() {
     if (!count || !contribData?.stale) return;
     const run = ++contribRun;
+    /** @type {Answer<'gitchop:contributions:refresh'> | null} */
     let next = null;
     try {
-      const response = await api.runtime.sendMessage({ type: 'gitchop:contributions:refresh' });
+      const response = await send({ type: 'gitchop:contributions:refresh' });
       if (response?.ok) next = response;
     } catch {
       /* keep what is already on screen */

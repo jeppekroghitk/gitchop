@@ -1,5 +1,6 @@
 /** The pull request column: its lanes, the title popover, and a refresh painted as what changed. */
-import { api, isSafeUrl } from '../../lib/links.js';
+import { isSafeUrl } from '../../lib/links.js';
+import { send } from '../../lib/messages.js';
 import { node } from '../dom.js';
 import { ARRIVE_STAGGER, LEAVE_BEAT, LEAVE_STAGGER, arrive, leave, leavingFor } from './motion.js';
 import { ghost, note, opensElsewhere } from './parts.js';
@@ -8,6 +9,13 @@ import { diffRows, laneRows } from './rows.js';
 /** The one row in a lane that is not a pull request: the tail for whatever GitHub holds beyond what was fetched. */
 const MORE_ROW = 'more';
 
+/** @import { Answer } from '../../background/messages.js' */
+/** @import { Menu } from '../menu.js' */
+
+/**
+ * @param {Menu} menu
+ * @param {Answer<'gitchop:pulls'> | null} pulls
+ */
 export function createPulls(menu, pulls) {
   const { state } = menu;
   const { pullsEl, pullsList } = menu.el;
@@ -20,6 +28,7 @@ export function createPulls(menu, pulls) {
   pop.setAttribute('role', 'tooltip');
   pop.setAttribute('aria-hidden', 'true');
   pullsEl?.append(pop);
+  /** @type {HTMLElement | null} */
   let popHover = null;
 
   let pullsData = pulls ?? null;
@@ -41,7 +50,7 @@ export function createPulls(menu, pulls) {
       hidePop();
       return;
     }
-    const box = pullsEl.getBoundingClientRect();
+    const box = /** @type {HTMLElement} */ (pullsEl).getBoundingClientRect();
     const row = item.getBoundingClientRect();
     const at = title.getBoundingClientRect();
     // Under the row, starting where the title starts and never past the column's edge. Only when
@@ -68,7 +77,7 @@ export function createPulls(menu, pulls) {
 
   /** A column is in the layout only while the viewport has room for it; the CSS decides. */
   function pullsVisible() {
-    return Boolean(pullsEl) && pullsEl.getClientRects().length > 0;
+    return Boolean(pullsEl) && /** @type {HTMLElement} */ (pullsEl).getClientRects().length > 0;
   }
 
   /**
@@ -110,7 +119,7 @@ export function createPulls(menu, pulls) {
     // Same gate as the panel: nothing becomes clickable without passing the scheme check.
     const interactive = entry.usable && isSafeUrl(entry.url);
     const item = node(interactive ? 'a' : 'div', `gc-item gc-pr${entry.kind === MORE_ROW ? ' gc-pr--more' : ''}`);
-    if (interactive) item.href = entry.url;
+    if (interactive) /** @type {HTMLAnchorElement} */ (item).href = entry.url;
     if (entry.tip) item.title = entry.tip;
 
     const icon = node('span', 'gc-icon');
@@ -209,7 +218,8 @@ export function createPulls(menu, pulls) {
    * column has emptied under it.
    */
   function renderPulls() {
-    if (!pullsEl) return;
+    if (!pullsEl || !pullsList) return;
+    /** @type {Partial<Answer<'gitchop:pulls'>>} */
     const data = pullsData ?? {};
     const rows = laneRows(data);
     const loaded = (data.lanes ?? []).some((lane) => lane.pulls !== null);
@@ -231,6 +241,7 @@ export function createPulls(menu, pulls) {
 
     state.pullsItems = [];
     const arriving = [];
+    /** @type {ChildNode | null} */
     let cursor = pullsList.firstChild;
     for (const row of rows) {
       let record = pullsRows.get(row.key);
@@ -241,8 +252,8 @@ export function createPulls(menu, pulls) {
         pullsRows.set(row.key, record);
         arriving.push(record);
       }
-      while (cursor && cursor !== record.li && cursor.dataset?.leaving === 'true') cursor = cursor.nextSibling;
-      if (cursor === record.li) cursor = cursor.nextSibling;
+      while (cursor && cursor !== record.li && /** @type {Partial<HTMLElement>} */ (cursor).dataset?.leaving === 'true') cursor = cursor.nextSibling;
+      if (cursor === record.li) cursor = /** @type {ChildNode} */ (cursor).nextSibling;
       else pullsList.insertBefore(record.li, cursor);
       if (row.kind === 'pull' || row.kind === 'more') state.pullsItems.push({ key: row.key, entry: record.entry, item: record.item });
     }
@@ -267,9 +278,10 @@ export function createPulls(menu, pulls) {
   async function refreshPulls() {
     if (!pullsEl || !pullsData?.stale) return;
     const run = ++pullsRun;
+    /** @type {Answer<'gitchop:pulls:refresh'> | null} */
     let next = null;
     try {
-      const response = await api.runtime.sendMessage({ type: 'gitchop:pulls:refresh' });
+      const response = await send({ type: 'gitchop:pulls:refresh' });
       if (response?.ok) next = response;
     } catch {
       /* keep what is already on screen */

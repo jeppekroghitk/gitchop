@@ -42,15 +42,19 @@ export function skeletons(count, target, tall = false) {
 /**
  * One line of a popover: a title and its detail, a link when the URL passes the scheme check and
  * a plain line when there is none. Following it dismisses the menu, as any row does.
+ * @param {string} title
+ * @param {string} detail
+ * @param {string} url
+ * @param {{ more?: boolean, dismiss?: () => void }} [options]
  */
 export function popLine(title, detail, url, { more = false, dismiss } = {}) {
   const usable = isSafeUrl(url);
   const line = node(usable ? 'a' : 'div', `gc-pop-item${more ? ' gc-pop-item--more' : ''}`);
   if (usable) {
-    line.href = url;
+    /** @type {HTMLAnchorElement} */ (line).href = url;
     line.addEventListener('click', (event) => {
       if (opensElsewhere(event)) return;
-      dismiss();
+      dismiss?.();
     });
   }
   line.append(node('span', 'gc-pop-title', title));

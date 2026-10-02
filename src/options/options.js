@@ -18,13 +18,15 @@ import { load as loadNews, watch as watchNews } from './news-card.js';
 import { load as loadAccess, watch as watchAccess } from './access.js';
 import { load as loadEffects } from './effects-card.js';
 
-const rowsEl = document.getElementById('rows');
-const statusEl = document.getElementById('status');
-const tokensEl = document.getElementById('tokens');
+const rowsEl = /** @type {HTMLElement} */ (document.getElementById('rows'));
+const statusEl = /** @type {HTMLElement} */ (document.getElementById('status'));
+const tokensEl = /** @type {HTMLElement} */ (document.getElementById('tokens'));
 
 let links = [];
+/** @type {number | null} */
 let saveTimer = null;
 let lastWritten = '';
+/** @type {number | null} */
 let statusTimer = null;
 
 function flash(text) {
@@ -54,6 +56,7 @@ function scheduleCommit() {
   saveTimer = setTimeout(commit, 400);
 }
 
+/** @param {{ className?: string, placeholder: string, value?: string, label: string, maxLength?: number }} spec */
 function field({ className, placeholder, value, label, maxLength }) {
   const input = document.createElement('input');
   input.type = 'text';
@@ -158,14 +161,14 @@ function renderTokens() {
   }
 }
 
-document.getElementById('add').addEventListener('click', () => {
+/** @type {HTMLElement} */ (document.getElementById('add')).addEventListener('click', () => {
   links.push({ id: newId(), icon: '', label: '', url: '' });
   render();
   rowsEl.lastElementChild?.querySelectorAll('input')[1]?.focus();
   commit();
 });
 
-document.getElementById('reset').addEventListener('click', () => {
+/** @type {HTMLElement} */ (document.getElementById('reset')).addEventListener('click', () => {
   if (!confirm('Replace your links with the defaults?')) return;
   links = withIds(DEFAULT_LINKS);
   render();
@@ -188,7 +191,7 @@ window.addEventListener('beforeunload', () => {
 
 // Straight from the manifest, so there is only ever one place the version is written down.
 const { name, version } = api.runtime.getManifest();
-document.getElementById('version').textContent = `${name} ${version}`;
+/** @type {HTMLElement} */ (document.getElementById('version')).textContent = `${name} ${version}`;
 
 // The page to show is decided before anything is fetched, so the first paint is the right card.
 mountPages();

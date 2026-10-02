@@ -1,5 +1,6 @@
 import { api } from '../lib/links.js';
 import { KEY as EFFECTS_KEY, sanitize as sanitizeEffects } from '../lib/effects.js';
+import { send } from '../lib/messages.js';
 import { createStage } from './chop.js';
 import { readContext } from './context.js';
 import { createMenu } from './menu.js';
@@ -13,12 +14,22 @@ import { createMenu } from './menu.js';
  * The global rather than `window`, which in Firefox is the page's window seen through a wrapper.
  */
 const INSTALLED = Symbol.for('gitchop.installed');
-if (!globalThis[INSTALLED]) {
+if (!(/** @type {Record<symbol, unknown>} */ (globalThis))[INSTALLED]) {
   Object.defineProperty(globalThis, INSTALLED, { value: true });
   install();
 }
 
+/** @import { Message, MessageType, Reply } from '../background/messages.js' */
+
 function install() {
+  /**
+   * @type {{
+   *   open: boolean,
+   *   stage: ReturnType<typeof createStage> | null,
+   *   menu: ReturnType<typeof createMenu> | null,
+   *   lastFocus: HTMLElement | null,
+   * }}
+   */
   const state = { open: false, stage: null, menu: null, lastFocus: null };
 
   /**
@@ -45,9 +56,14 @@ function install() {
     return role === 'textbox' || role === 'searchbox';
   }
 
+  /**
+   * @template {MessageType} T
+   * @param {Message<T>} message
+   * @returns {Promise<Reply<T> | null | undefined>}
+   */
   async function ask(message) {
     try {
-      return await api.runtime.sendMessage(message);
+      return await send(message);
     } catch {
       return null;
     }
@@ -116,7 +132,7 @@ function install() {
   async function openChop() {
     if (state.open) return;
     state.open = true;
-    state.lastFocus = deepActiveElement();
+    state.lastFocus = /** @type {HTMLElement | null} */ (deepActiveElement());
 
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const stage = createStage({ reduced, effects });
@@ -177,7 +193,7 @@ function install() {
     window.removeEventListener('resize', onResize);
 
     menu?.closed();
-    if (menu) stage.close();
+    if (menu) /** @type {NonNullable<typeof stage>} */ (stage).close();
     else stage?.destroy();
 
     if (lastFocus?.isConnected) lastFocus.focus({ preventScroll: true });

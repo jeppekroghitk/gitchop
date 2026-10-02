@@ -14,8 +14,10 @@ import { RATE_KEY } from './keys.js';
  * being stopped. The modules that ask GitHub call the global fetch, and this is that fetch.
  *
  * Importing this module is what puts it in place, so it must be imported before anything asks.
+ * @type {Map<string, string>}
  */
 const rateScopes = new Map();
+/** @type {import('../lib/rate.js').RateTable} */
 let rateTable = {};
 const rateReady = api.storage.local
   .get(RATE_KEY)
@@ -24,9 +26,14 @@ const rateReady = api.storage.local
     rateTable = table && typeof table === 'object' ? table : {};
   })
   .catch(() => {});
+/** @type {ReturnType<typeof setTimeout> | null} */
 let rateWrite = null;
 
-/** Called as each token is opened, so its requests are metered under the login it belongs to. */
+/**
+ * Called as each token is opened, so its requests are metered under the login it belongs to.
+ * @param {string} secret
+ * @param {{ login?: string | null, id?: string }} entry
+ */
 export function rememberScope(secret, entry) {
   rateScopes.set(secret, scopeOf(entry));
 }
@@ -36,16 +43,22 @@ export function forgetRates() {
   rateTable = {};
 }
 
+/** @param {RequestInit | undefined} init */
 function rateScopeOf(init) {
   const auth = new Headers(init?.headers ?? {}).get('authorization') ?? '';
   const secret = auth.replace(/^(bearer|token)\s+/i, '').trim();
   return (secret && rateScopes.get(secret)) || ANONYMOUS;
 }
 
+/**
+ * @param {RequestInfo | URL} input
+ * @param {RequestInit | undefined} init
+ * @param {Response} response
+ */
 async function noteAnswer(input, init, response) {
   let host = '';
   try {
-    host = new URL(typeof input === 'string' ? input : input?.url).host;
+    host = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input?.url).host;
   } catch {
     return;
   }
@@ -67,13 +80,17 @@ async function noteAnswer(input, init, response) {
 }
 
 const nativeFetch = globalThis.fetch.bind(globalThis);
+/** @type {typeof fetch} */
 globalThis.fetch = async (input, init) => {
   const response = await nativeFetch(input, init);
   noteAnswer(input, init, response).catch(() => {});
   return response;
 };
 
-/** The budgets as the menu paints them: this profile's tokens by login, in their order, and the nameless requests after. */
+/**
+ * The budgets as the menu paints them: this profile's tokens by login, in their order, and the nameless requests after.
+ * @returns {Promise<{ scopes: import('../lib/rate.js').RateScope[] }>}
+ */
 export async function rateState() {
   await rateReady;
   const config = await readConfig();

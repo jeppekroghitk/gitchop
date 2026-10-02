@@ -3,6 +3,14 @@ export const api = globalThis.browser ?? globalThis.chrome;
 
 export const STORAGE_KEY = 'links';
 
+/**
+ * One of your own links, as storage.sync and the gist hold it. `url` may carry {placeholders},
+ * filled from the page when the link is followed.
+ * @typedef {{ id: string, icon: string, label: string, url: string }} Link
+ */
+
+/** @typedef {{ enabled: number }} PanelSettings */
+
 export const PLACEHOLDERS = [
   ['{owner}', 'Repository owner, e.g. octocat'],
   ['{repo}', 'Repository name, e.g. hello-world'],
@@ -34,26 +42,41 @@ export const PANEL_SWITCHES = [
   },
 ];
 
-/** Storage is shared state: whatever shape comes back, the switch ends up on or off. */
+/**
+ * Storage is shared state: whatever shape comes back, the switch ends up on or off.
+ * @param {unknown} [raw]
+ * @returns {PanelSettings}
+ */
 export function sanitizePanel(raw) {
-  const source = raw && typeof raw === 'object' ? raw : {};
+  /** @type {Record<string, unknown>} */
+  const source = raw && typeof raw === 'object' ? /** @type {Record<string, unknown>} */ (raw) : {};
+  /** @type {Record<string, number>} */
   const settings = {};
   for (const { id, value } of PANEL_SWITCHES) {
     const number = Number(source[id]);
     settings[id] = Number.isFinite(number) ? (number >= 1 ? 1 : 0) : value;
   }
-  return settings;
+  return /** @type {PanelSettings} */ (settings);
 }
 
+/** @returns {string} */
 export function newId() {
   return crypto.randomUUID();
 }
 
+/**
+ * @param {Omit<Link, 'id'>[]} links
+ * @returns {Link[]}
+ */
 export function withIds(links) {
   return links.map((link) => ({ id: newId(), ...link }));
 }
 
-/** Only http(s) links may be stored — anything else could execute on click. */
+/**
+ * Only http(s) links may be stored — anything else could execute on click.
+ * @param {unknown} url
+ * @returns {boolean}
+ */
 export function isSafeUrl(url) {
   try {
     const probe = new URL(String(url).replace(/\{(\w+)\}/g, 'x'));
@@ -63,6 +86,11 @@ export function isSafeUrl(url) {
   }
 }
 
+/**
+ * Every field a string of its own length, whatever was stored; an id is minted where none was.
+ * @param {{ id?: unknown, icon?: unknown, label?: unknown, url?: unknown }} link
+ * @returns {Link}
+ */
 export function sanitize(link) {
   return {
     id: typeof link.id === 'string' && link.id ? link.id : newId(),
@@ -72,6 +100,7 @@ export function sanitize(link) {
   };
 }
 
+/** @returns {Promise<Link[]>} */
 export async function loadLinks() {
   const stored = await api.storage.sync.get(STORAGE_KEY);
   const links = stored[STORAGE_KEY];
@@ -79,6 +108,7 @@ export async function loadLinks() {
   return links.filter((link) => link && typeof link === 'object').map(sanitize);
 }
 
+/** @param {Parameters<typeof sanitize>[0][]} links */
 export async function saveLinks(links) {
   await api.storage.sync.set({ [STORAGE_KEY]: links.map(sanitize) });
 }
