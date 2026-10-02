@@ -59,7 +59,7 @@ export function tokenState(hasToken) {
     if (!('needsToken' in item.dataset)) continue;
     item.dataset.locked = String(!hasToken);
     if (hasToken) item.removeAttribute('title');
-    else item.title = 'Needs a token';
+    else item.title = 'Needs a sign-in or a token';
   }
 }
 
@@ -73,11 +73,11 @@ export function tokenGate() {
   const gate = document.createElement('div');
   gate.className = 'gate';
   const line = document.createElement('p');
-  line.textContent = 'Needs a token.';
+  line.textContent = 'Needs a sign-in or a token.';
   const go = document.createElement('button');
   go.type = 'button';
   go.className = 'btn';
-  go.textContent = 'Add a token →';
+  go.textContent = 'Sign in or add a token →';
   go.addEventListener('click', () => {
     show('token');
     items.find((item) => item.dataset.page === 'token')?.focus();

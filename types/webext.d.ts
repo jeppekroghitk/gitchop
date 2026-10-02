@@ -29,6 +29,7 @@ declare namespace WebExt {
   interface Storage {
     local: StorageArea;
     sync: StorageArea;
+    session?: StorageArea;
     onChanged: Event<(changes: { [key: string]: StorageChange }, area: AreaName) => void>;
   }
 
@@ -52,6 +53,8 @@ declare namespace WebExt {
     onStartup?: Event<() => void>;
     openOptionsPage(): Promise<void>;
     getManifest(): Manifest;
+    /** Firefox only, which is what makes it the way to tell the two apart. */
+    getBrowserInfo?(): Promise<{ name: string; version: string }>;
   }
 
   interface Alarm {

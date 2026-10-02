@@ -10,3 +10,5 @@ export const PULLS_CACHE_KEY = 'pullsCache';
 export const RATE_KEY = 'rateCache';
 export const NEWS_CACHE_KEY = 'newsCache';
 export const CONTRIB_CACHE_KEY = 'contributionsCache';
+/** In storage.session, not storage.local: the sign-in under way. */
+export const SIGNIN_KEY = 'signin';

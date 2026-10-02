@@ -155,7 +155,7 @@ function explain(status, errors) {
   if (status === 401) return 'GitHub rejected the token.';
   if (status === 403 || status === 429) return 'GitHub rate-limited the request. It will try again shortly.';
   if (types.has('INSUFFICIENT_SCOPES') || messages.some((message) => /scope|permission/i.test(message))) {
-    return 'The token cannot read your contributions. A classic token with repo can; a fine-grained one counts only what it is allowed to see.';
+    return 'The token cannot read your contributions. A classic token with read:user can; a fine-grained one or a sign-in counts only what it is allowed to see.';
   }
   if (messages.length > 0) return `GitHub said: ${messages[0].slice(0, 160)}`;
   if (status && status !== 200) return `GitHub returned ${status}.`;

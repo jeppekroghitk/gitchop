@@ -1,5 +1,5 @@
 import { PANEL_KEY, api, loadLinks, sanitizePanel } from '../lib/links.js';
-import { REPO_LIMIT, findRepos, matchIndex, ownersFromLinks } from '../lib/repos.js';
+import { REPO_LIMIT, findRepos, matchIndex, ownersFromLinks, pickSearchToken } from '../lib/repos.js';
 import { SETTINGS_KEY as PULLS_SETTINGS_KEY, sanitizeSettings as pullsSettings } from '../lib/pulls.js';
 import { SETTINGS_KEY as CONTRIB_SETTINGS_KEY, sanitizeSettings as contribSettings } from '../lib/contributions.js';
 import { paintAction } from './action.js';
@@ -12,10 +12,13 @@ import { pullsState, refreshPulls, schedulePulls } from './pulls.js';
 import { readPullsSettings } from './pulls-store.js';
 import { rateState } from './rate.js';
 import { buildIndex, indexState, readIndex } from './repo-index.js';
+import { cancelSignIn, pendingSignIn, pollSignIn, refreshInstallations, startSignIn } from './signin.js';
 import { connectGist, pull, push, stopBackup } from './sync.js';
 import { addToken, loadTokens, removeToken } from './tokens.js';
 
 /** @import { Repo } from '../lib/repos.js' */
+/** @import { SyncState } from './config.js' */
+/** @import { SignInCode, SignInPoll } from './signin.js' */
 
 /**
  * Every message the menu and the settings page send, by type, each answering with an object. This
@@ -44,9 +47,12 @@ const HANDLERS = {
    * @returns {Promise<{ results: Repo[], owners: string[] }>}
    */
   'gitchop:repos': async (message) => {
-    const [first] = await loadTokens();
+    // One token per search, chosen for what it asks: the widest reach into the owner it names, or
+    // the widest reach overall for a bare word. Whatever was saved first would do for neither once a
+    // sign-in that reaches two organisations sits beside a classic token that reaches all of them.
+    const token = pickSearchToken(await loadTokens(), message.query);
     const owners = ownersFromLinks(await loadLinks());
-    return { results: await findRepos(message.query, first?.secret, owners, REPO_LIMIT), owners };
+    return { results: await findRepos(message.query, token?.secret, owners, REPO_LIMIT), owners };
   },
   'gitchop:index:state': async () => indexState(await readIndex()),
   /** Instant: the snapshot as it stands, and whether it is worth asking for a fresh one. */
@@ -122,6 +128,28 @@ const HANDLERS = {
   'gitchop:token:save': (message) => addToken(message),
   /** @param {{ id: string }} message */
   'gitchop:token:remove': (message) => removeToken(message),
+  /**
+   * Click only: a code still live is handed back instead of asking GitHub for another.
+   * @returns {Promise<SignInCode>}
+   */
+  'gitchop:signin:start': () => startSignIn(),
+  /**
+   * On page load: the code a reload or another tab left showing, if it is still live.
+   * @returns {Promise<{ code: SignInCode | null }>}
+   */
+  'gitchop:signin:pending': () => pendingSignIn(),
+  /**
+   * One poll, never sooner than GitHub's interval.
+   * @returns {Promise<SignInPoll>}
+   */
+  'gitchop:signin:poll': () => pollSignIn(),
+  /** @returns {Promise<{}>} */
+  'gitchop:signin:cancel': () => cancelSignIn(),
+  /**
+   * Where the app is installed; asked when Settings opens with a sign-in saved.
+   * @returns {Promise<SyncState>}
+   */
+  'gitchop:signin:installations': () => refreshInstallations(),
   /** @param {{ gistId?: string }} message */
   'gitchop:sync:connect': (message) => connectGist(message),
   'gitchop:sync:stop': () => stopBackup(),

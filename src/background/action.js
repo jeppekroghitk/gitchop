@@ -1,4 +1,5 @@
 import { api } from '../lib/links.js';
+import { hasUsableToken, readConfig } from './config.js';
 import { readPullsCache, readPullsSettings } from './pulls-store.js';
 
 /**
@@ -25,8 +26,10 @@ export async function paintAction() {
     text = '!';
     title = 'gitchop — needs access to github.com; click to fix';
   } else {
-    const [settings, cache] = await Promise.all([readPullsSettings(), readPullsCache().catch(() => null)]);
-    const waiting = cache?.lanes?.needsReview?.total ?? 0;
+    // A count kept from before the sign-in was refused is no longer news, and the column it
+    // points at is hidden until there is a token again.
+    const [settings, cache, config] = await Promise.all([readPullsSettings(), readPullsCache().catch(() => null), readConfig()]);
+    const waiting = hasUsableToken(config) ? (cache?.lanes?.needsReview?.total ?? 0) : 0;
     if (settings.badge === 1 && settings.enabled === 1 && waiting > 0) {
       text = waiting > 99 ? '99+' : String(waiting);
       title = `gitchop — ${waiting} waiting on you`;

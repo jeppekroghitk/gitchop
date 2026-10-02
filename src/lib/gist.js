@@ -9,7 +9,10 @@ const FORMAT = 2;
  * @typedef {{ format: number, links: unknown[], settings: Record<string, unknown>, updatedAt: string | null }} Store
  */
 
-/** @typedef {'fine-grained' | 'classic' | 'unknown'} TokenKind */
+/**
+ * `app` is a sign-in: a user token of gitchop's GitHub App, which renews itself.
+ * @typedef {'fine-grained' | 'classic' | 'app' | 'unknown'} TokenKind
+ */
 
 /**
  * Who a token belongs to, as GitHub said.
@@ -89,13 +92,16 @@ export function parseStore(text) {
 const WRITE_SCOPES = /^(repo|workflow|delete_repo|admin:|write:)/;
 
 /**
- * Fine-grained tokens start github_pat_; the classic family is ghp_, gho_, ghu_, ghs_, ghr_.
+ * Fine-grained tokens start github_pat_. A GitHub App's user token starts ghu_, and is told apart
+ * from the classic family — ghp_, gho_, ghs_, ghr_ — because it reaches only where the app is
+ * installed and has no scopes to speak of.
  * @param {string} token
  * @returns {TokenKind}
  */
 export function tokenKind(token) {
+  if (/^ghu_/.test(token)) return 'app';
   if (/^github_pat_/.test(token)) return 'fine-grained';
-  if (/^gh[pousr]_/.test(token)) return 'classic';
+  if (/^gh[posr]_/.test(token)) return 'classic';
   return 'unknown';
 }
 
@@ -117,9 +123,11 @@ export function scopesGrantWrite(scopes) {
  * @returns {string}
  */
 export function tokenLabel(entry) {
-  const owners = entry?.kind === 'classic' ? [] : entry?.owners ?? [];
+  // A sign-in is the account's too; where the app is installed is the detail beneath, not the name.
+  const account = entry?.kind === 'classic' || entry?.kind === 'app';
+  const owners = account ? [] : entry?.owners ?? [];
   if (owners.length > 0) return owners.map((owner) => `@${owner}`).join(', ');
-  if (entry?.kind !== 'classic' && entry?.target) return `@${entry.target}`;
+  if (!account && entry?.target) return `@${entry.target}`;
   return entry?.login ? `@${entry.login}` : entry?.kind ?? 'token';
 }
 
@@ -158,10 +166,13 @@ export async function identify(token) {
   const user = await response.json();
   const header = response.headers.get('x-oauth-scopes');
   const scopes = header ? header.split(',').map((scope) => scope.trim()).filter(Boolean) : [];
+  // The prefix decides first: whether GitHub sends the scopes header, empty, for an app's user
+  // token is not documented, and its presence alone would class a sign-in as classic.
+  const prefixed = tokenKind(token);
   return {
     login: user.login,
     scopes,
-    kind: header === null ? tokenKind(token) : 'classic',
+    kind: prefixed === 'app' ? 'app' : header === null ? prefixed : 'classic',
     expiresAt: parseExpiry(response.headers.get('github-authentication-token-expiration')),
   };
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import { test } from 'node:test';
-import { parseExpiry, parseStore, serialise } from '../src/lib/gist.js';
+import { identify, parseExpiry, parseStore, serialise, tokenKind } from '../src/lib/gist.js';
 
 test('a token runs out when the header GitHub sends with every request made with it says', () => {
   assert.equal(parseExpiry('2026-12-31 12:00:00 UTC'), '2026-12-31T12:00:00.000Z', "GitHub's header, as an ISO stamp");
@@ -56,4 +56,24 @@ test('the gist’s shape is checked before its contents', () => {
   assert.deepEqual(parseStore('{"links":[],"settings":[1,2]}').settings, {}, 'settings that are not an object are none');
   assert.deepEqual(parseStore('{"links":[],"settings":"x"}').settings, {});
   assert.equal(parseStore('{"links":[],"updatedAt":5}').updatedAt, null, 'a stamp that is not a string is no stamp');
+});
+
+test('a token’s kind is read off its prefix, a sign-in’s first of all', () => {
+  assert.equal(tokenKind('ghu_x'), 'app', 'an app’s user token is a sign-in');
+  assert.equal(tokenKind('gho_x'), 'classic');
+  assert.equal(tokenKind('ghp_x'), 'classic');
+  assert.equal(tokenKind('github_pat_x'), 'fine-grained');
+  assert.equal(tokenKind('something'), 'unknown');
+});
+
+test('a sign-in stays a sign-in when GitHub sends an empty scopes header for it', async () => {
+  const before = globalThis.fetch;
+  globalThis.fetch = async () => new Response('{"login":"me"}', { status: 200, headers: { 'x-oauth-scopes': '' } });
+  try {
+    assert.deepEqual(await identify('ghu_x'), { login: 'me', scopes: [], kind: 'app', expiresAt: null });
+    assert.equal((await identify('ghp_x')).kind, 'classic', 'the header still makes an unprefixed-as-app token classic');
+    assert.equal((await identify('unknown_x')).kind, 'classic');
+  } finally {
+    globalThis.fetch = before;
+  }
 });

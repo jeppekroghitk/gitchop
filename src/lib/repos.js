@@ -76,6 +76,111 @@ async function search(term, token, limit, owned = false) {
 }
 
 /**
+ * What was typed, as a search reads it: trimmed, with a pasted github.com address and any trailing
+ * slash taken off, so a URL and an owner/name ask the same thing.
+ * @param {unknown} query
+ * @returns {string}
+ */
+export function cleanQuery(query) {
+  return String(query ?? '')
+    .trim()
+    .replace(/^https?:\/\/(www\.)?github\.com\//i, '')
+    .replace(/\/+$/, '');
+}
+
+/**
+ * The owner a search names: the first half of `owner/name`, or the account a pasted github.com
+ * address points into. A bare word names nobody, and neither does a feature page of GitHub's own.
+ * @param {unknown} query
+ * @returns {string | null}
+ */
+export function queryOwner(query) {
+  const trimmed = cleanQuery(query);
+  const owner = SLASHED.test(trimmed) ? trimmed.slice(0, trimmed.indexOf('/')) : OWNER_IN_URL.exec(String(query ?? '').trim())?.[1];
+  return owner && !NOT_OWNERS.has(owner.toLowerCase()) ? owner : null;
+}
+
+/**
+ * Whether a saved token can see an owner's private repositories, as far as gitchop knows. A classic
+ * token reaches everything the account does. A sign-in reaches the accounts the app is installed on.
+ * A fine-grained token reaches the one owner its private repositories said, or, until a listing has
+ * said, the owner it was made for.
+ * @param {{ kind?: string | null, owners?: string[] | null, target?: string | null, installations?: { owner: string }[] | null }} entry
+ * @param {string} owner
+ * @returns {boolean}
+ */
+export function reaches(entry, owner) {
+  const wanted = String(owner ?? '').toLowerCase();
+  if (!wanted) return false;
+  if (entry?.kind === 'classic') return true;
+  /** @type {(name: string | null | undefined) => boolean} */
+  const same = (name) => String(name ?? '').toLowerCase() === wanted;
+  if (entry?.kind === 'app') return (entry.installations ?? []).some((install) => same(install.owner));
+  if (Array.isArray(entry?.owners) && entry.owners.length > 0) return entry.owners.some(same);
+  return same(entry?.target);
+}
+
+/** Narrowest first: what the app reaches, then a token made for one owner, then the account-wide one. */
+const REACH_ORDER = { app: 0, 'fine-grained': 1, unknown: 1, classic: 2 };
+
+/**
+ * The tokens to try for one owner, best first. Those that reach it come first, narrowest first, so
+ * a classic token's budget is not spent on what a sign-in or a fine-grained token covers; the rest
+ * follow in the order they were saved, since a public repository answers to any of them.
+ * @template {{ kind?: string | null, owners?: string[] | null, target?: string | null, installations?: { owner: string }[] | null }} T
+ * @param {T[]} tokens
+ * @param {string | null | undefined} owner
+ * @returns {T[]}
+ */
+export function rankForOwner(tokens, owner) {
+  const list = [...(tokens ?? [])];
+  if (!owner) return list;
+  /** @type {(entry: T) => number} */
+  const order = (entry) => REACH_ORDER[/** @type {keyof typeof REACH_ORDER} */ (entry.kind ?? 'unknown')] ?? 1;
+  const reaching = list.filter((entry) => reaches(entry, owner)).sort((a, b) => order(a) - order(b));
+  return [...reaching, ...list.filter((entry) => !reaching.includes(entry))];
+}
+
+/**
+ * The one token a search goes out with. A search that names an owner goes with the widest reach
+ * into that owner. A bare word goes with the widest reach overall — a classic token if there is
+ * one, else the sign-in. Either way the results are only those the token may see, and GitHub says
+ * nothing about the ones it leaves out, so this is the opposite of rankForOwner's narrowest first.
+ * That order saves a classic token's budget where any token that reaches will do, but here it would
+ * hide every repository outside an installation's selection that the classic token can see.
+ * @template {{ kind?: string | null, owners?: string[] | null, target?: string | null, installations?: { owner: string, selection?: string }[] | null }} T
+ * @param {T[]} tokens
+ * @param {unknown} query
+ * @returns {T | null}
+ */
+export function pickSearchToken(tokens, query) {
+  const list = tokens ?? [];
+  const owner = queryOwner(query);
+  if (owner) {
+    const reaching = list.filter((entry) => reaches(entry, owner));
+    return [...reaching].sort((a, b) => searchReach(b, owner) - searchReach(a, owner))[0] ?? list[0] ?? null;
+  }
+  return list.find((entry) => entry.kind === 'classic') ?? list.find((entry) => entry.kind === 'app') ?? list[0] ?? null;
+}
+
+/**
+ * How much of one owner a token that reaches it can search, widest highest. A classic token sees
+ * all the account does. An installation on all of an owner's repositories sees as much of them as
+ * the account does. A fine-grained token may have been made for a few repositories, and gitchop
+ * cannot tell. An installation on selected repositories is known to see only some.
+ * @param {{ kind?: string | null, installations?: { owner: string, selection?: string }[] | null }} entry
+ * @param {string} owner
+ * @returns {number}
+ */
+function searchReach(entry, owner) {
+  if (entry.kind === 'classic') return 3;
+  if (entry.kind !== 'app') return 1;
+  const wanted = owner.toLowerCase();
+  const install = (entry.installations ?? []).find((each) => String(each.owner ?? '').toLowerCase() === wanted);
+  return install?.selection === 'selected' ? 0 : 2;
+}
+
+/**
  * Accounts worth favouring, read straight off the saved links: anything linked at
  * github.com/<owner> or github.com/<owner>/<repo>. Links kept in the menu are a good signal
  * of whose repositories matter, and the order is the order they were put in.
@@ -224,10 +329,7 @@ function merge(groups, limit) {
  * @returns {Promise<Repo[]>}
  */
 export async function findRepos(query, token, owners = [], limit = REPO_LIMIT) {
-  const trimmed = String(query ?? '')
-    .trim()
-    .replace(/^https?:\/\/(www\.)?github\.com\//i, '')
-    .replace(/\/+$/, '');
+  const trimmed = cleanQuery(query);
   if (trimmed.length < 2) return [];
 
   /** @type {(name: string) => boolean} */

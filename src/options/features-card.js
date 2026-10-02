@@ -134,7 +134,7 @@ function render(error) {
       element(
         'p',
         'note',
-        'Pull requests and contributions need a token under Tokens. The switches keep your choice for when there is one.',
+        'Pull requests and contributions need a sign-in or a token under Sign-in. The switches keep your choice for when there is one.',
       ),
     );
   }

@@ -75,13 +75,35 @@ panel stays. Without it, the column nearest where the panel would be — the pul
 news alone — ends in a strip with a *settings* word that opens Settings, since the row that did so
 sits in the links; the toolbar icon opens Settings either way.
 
+## Signing in
+
+**Sign in with GitHub**, under Sign-in in Settings, is how gitchop reaches your private repositories,
+pull requests and gist. It shows a short code; open github.com/login/device, type the code, and
+approve *gitchop for GitHub*. The page carries on by itself and says *Signed in as @you*. The sign-in
+renews itself in the background every eight hours or so, and after about six months unused, or if
+GitHub refuses a renewal, the card says *signed out* with **Sign in again**. **Sign out** forgets it
+here; revoke it on GitHub at github.com/settings/applications.
+
+Signing in uses a GitHub App, so what it can read is read-only — Metadata, Contents, Issues and Pull
+requests — plus Gists for the backup, and the repository part works only where the app is
+installed. After you sign in, the card lists where it is installed and, for your own account and
+the organisations in your links that do not have it, an **Install on @org** link. Organisations a
+saved fine-grained token already reaches are listed as covered by that token instead. You pick the
+repositories on GitHub; an organisation owner installs at once, while a member's install becomes a
+request to the owners. Until an organisation has the app or a token, gitchop sees only its public
+repositories, with no error from GitHub to say so — add a personal access token for that
+organisation instead, from the same card. Signing in counts only your public contributions; a
+classic token with `read:user` is still the way to count private ones.
+
 ## Private repositories
 
-GitHub's search does not return private repositories. To find them, add a GitHub token in Settings
-and press **Build index** — gitchop then keeps its own list of the repositories your token can reach,
-and matches it locally.
+GitHub's search does not return private repositories. To find them, sign in or add a GitHub token in
+Settings and press **Build index** — gitchop then keeps its own list of the repositories your tokens
+can reach, and matches it locally. A search that names an owner goes out with the token that sees the
+most of that owner, and a bare word with the widest reach you have.
 
-Settings recommends a fine-grained token and warns against a classic one: the `repo` scope a classic
+Personal access tokens are under **Advanced** on the Sign-in page, and work beside a sign-in. Settings
+recommends a fine-grained token and warns against a classic one: the `repo` scope a classic
 token needs grants write to every repository the account can reach, in every organisation, and
 gitchop only ever reads. The fine-grained recipe is three steps. Name the owner — the exact name of
 the organisation, or blank for your own account — and the link opens GitHub's form for that owner
@@ -115,8 +137,8 @@ your PRs*. A lane that empties says so. The toolbar icon carries the number wait
 know before you press the key. Settings has a switch for the column under Panels, and for the badge
 and whether drafts count under Pull requests.
 
-It needs a token that can read pull requests: a classic token with `repo`, or a fine-grained one with
-**Pull requests: read-only**. A fine-grained token that was only granted Metadata is enough for the
+It needs a sign-in or a token that can read pull requests: a classic token with `repo`, or a
+fine-grained one with **Pull requests: read-only**. A fine-grained token that was only granted Metadata is enough for the
 index but shows the lanes empty rather than refusing — GitHub returns less, not an error. Viewports
 narrower than about 980 px have no room for it, and the menu is what it always was.
 
@@ -167,7 +189,9 @@ year has something to stand beside. It is not a link; it is there to be looked a
 
 It is one GraphQL request per saved token, asking for this year from January the 1st to now and for
 each of the three whole years before, and the highest count for this year is the one shown, its past
-years with it — a fine-grained token sees fewer repositories than a classic one and may count fewer.
+years with it — a fine-grained token or a sign-in sees fewer repositories than a classic one and
+may count fewer. Private contributions are counted only for a classic token with `read:user`, which
+the classic token link asks for.
 A switch under Panels in Settings turns it off.
 
 ## The gauge
@@ -193,8 +217,9 @@ secret gist under **Backup** in Settings and every change is written there as a 
 links, the repositories you subscribe to for news and the edition hour, the switches under Panels and
 Pull requests, and the chop. Tokens never go in it. A pull replaces what is here with what the gist
 holds; a gist made by an earlier version holds only links, and is written back whole once read. The
-gist is written with whichever saved token can reach it: a fine-grained token for your own account,
-which the token link asks Gists for when the owner is left blank, or a classic token with `gist`.
+gist is written with whichever can reach it: a sign-in, which holds Gists without installing the app
+anywhere, a fine-grained token for your own account, which the token link asks Gists for when the
+owner is left blank, or a classic token with `gist`.
 
 [PRIVACY.md](PRIVACY.md) covers what is stored and what is sent to GitHub.
 

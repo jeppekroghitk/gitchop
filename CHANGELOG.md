@@ -5,8 +5,32 @@ it from.
 
 ## Unreleased
 
-Nothing changes in the menu, the chop or Settings; this is the inside rearranged, so that the next
-change is easier to make and harder to get wrong.
+- Sign in with GitHub ([#17](https://github.com/jeppekroghitk/gitchop/issues/17)). Settings shows a
+  short code to approve at github.com/login/device, and gitchop is signed in through its own GitHub
+  App, *gitchop for GitHub*: read-only on repositories, Gists for the backup, and only where the app
+  is installed. The card lists where it is, offers **Install on @org** for the owners in your links
+  that have neither the app nor a token, and says plainly that those owners are public-only until
+  they do; owners a saved token already reaches are listed as covered by it.
+  The sign-in renews itself — one renewal at a time, stored before it is used, since GitHub's
+  renewal tokens work once — and a renewal GitHub refuses marks it *signed out* rather than deleting
+  it. Until you sign in again it counts as no token, so the pull request column, the badge and the
+  contributions go away rather than freeze at their last answer. There is no client secret anywhere.
+  Personal access tokens stay, under **Advanced** on the same card, and work beside a sign-in: a
+  search, a news repository and the gist each go with the token that reaches them. The Tokens page is now called Sign-in.
+- With tokens alone, too, a search and the news choose a token by what it reaches rather than by
+  which was saved first: a search goes with the token that sees the most of what it names — a classic
+  token if there is one, and a sign-in before a fine-grained token only where the app is installed on
+  all of that owner's repositories — while a news repository tries the narrowest token that reaches
+  its owner first, and the next on a 404.
+  Before, both went in the order the tokens were saved.
+- Writes of the configuration take turns. Building the index wrote back the whole token list it had
+  read minutes earlier; with a token that renews itself, that would have put back a spent one.
+- The classic token link asks for `read:user` as well as `repo` and `gist`, since that is the scope
+  GitHub counts private contributions under, and the contributions error says so instead of naming
+  `repo`.
+
+The rest changes nothing in the menu, the chop or Settings; it is the inside rearranged, so that the
+next change is easier to make and harder to get wrong.
 
 - The content script is written as ES modules and bundled. Content scripts named in the manifest
   load as classic scripts in both browsers, so the content code could not import anything and leaned

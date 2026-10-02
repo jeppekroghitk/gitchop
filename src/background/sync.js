@@ -22,7 +22,9 @@ let inStep = null;
 
 /**
  * Only one of the tokens will hold the Gists permission, and a fine-grained token cannot be asked
- * what it can do. So try them, remember the one that worked, and start with it next time.
+ * what it can do. So try them, remember the one that worked, and start with it next time. A
+ * sign-in comes next after that one: Gists is an account permission of the app's, granted on
+ * signing in, with no installation needed, so it is the likeliest to hold it.
  * @template T
  * @param {(token: string) => Promise<T>} run
  * @returns {Promise<T>}
@@ -30,10 +32,12 @@ let inStep = null;
 async function withGistToken(run) {
   const config = await readConfig();
   const tokens = await loadTokens();
-  if (tokens.length === 0) throw new Error('Add a token first.');
+  if (tokens.length === 0) throw new Error(noTokenReason(config));
 
   const preferred = config.gistTokenId;
-  const ordered = [...tokens].sort((a, b) => Number(b.id === preferred) - Number(a.id === preferred));
+  /** @type {(entry: import('./tokens.js').OpenToken) => number} */
+  const rank = (entry) => (entry.id === preferred ? 0 : entry.kind === 'app' ? 1 : 2);
+  const ordered = [...tokens].sort((a, b) => rank(a) - rank(b));
 
   let failure = null;
   for (const entry of ordered) {
@@ -46,6 +50,16 @@ async function withGistToken(run) {
     }
   }
   throw failure ?? new Error('No saved token could reach the gist.');
+}
+
+/**
+ * Why there is no token to use: none saved, or only a sign-in GitHub has stopped accepting, which
+ * the user fixes in a different way.
+ * @param {import('./config.js').Config} config
+ */
+function noTokenReason(config) {
+  if (config.tokens.some((entry) => entry.needsSignIn)) return 'Sign in to GitHub again under Settings → Sign-in.';
+  return 'Sign in or add a token first.';
 }
 
 /** @param {unknown} raw */
@@ -185,7 +199,7 @@ export async function pull({ force = false } = {}) {
 /** @param {{ gistId?: string }} request */
 export async function connectGist({ gistId }) {
   const config = await readConfig();
-  if (config.tokens.length === 0) throw new Error('Add a token first.');
+  if (config.tokens.length === 0) throw new Error(noTokenReason(config));
   const wanted = String(gistId ?? '').trim();
 
   let id = wanted;

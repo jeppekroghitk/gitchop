@@ -1,7 +1,7 @@
 import { api } from '../lib/links.js';
 import { LANES, age, fetchLanes, mergeLanes } from '../lib/pulls.js';
 import { paintAction } from './action.js';
-import { now, readConfig } from './config.js';
+import { hasUsableToken, now, readConfig } from './config.js';
 import { PULLS_CACHE_KEY } from './keys.js';
 import { readPullsCache, readPullsSettings } from './pulls-store.js';
 import { loadTokens } from './tokens.js';
@@ -132,7 +132,7 @@ function presentLanes(cache) {
  */
 export async function pullsState() {
   const [settings, config, cache] = await Promise.all([readPullsSettings(), readConfig(), readPullsCache()]);
-  const hasToken = config.tokens.length > 0;
+  const hasToken = hasUsableToken(config);
   // Drafts switched since the snapshot was taken means the snapshot no longer matches the setting.
   const stale = pullsAreStale(cache) || (cache?.lanes && cache.drafts !== settings.drafts);
   return {
@@ -153,7 +153,7 @@ export async function schedulePulls() {
   try {
     const settings = await readPullsSettings();
     const config = await readConfig();
-    if (settings.enabled === 1 && config.tokens.length > 0) {
+    if (settings.enabled === 1 && hasUsableToken(config)) {
       const existing = await api.alarms.get(PULLS_ALARM);
       if (!existing) await api.alarms.create(PULLS_ALARM, { periodInMinutes: PULLS_EVERY_MINUTES });
     } else {

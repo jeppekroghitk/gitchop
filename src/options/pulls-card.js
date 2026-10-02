@@ -109,8 +109,8 @@ function render(state, error) {
       element(
         'p',
         'note',
-        'A classic token with repo, or a fine-grained one with Pull requests: read-only per owner. ' +
-          'Without one there is no column.',
+        'Signing in with GitHub covers it where gitchop is installed; so does a classic token with repo, ' +
+          'or a fine-grained one with Pull requests: read-only per owner. Without one there is no column.',
       ),
     );
     host.append(tokenGate());

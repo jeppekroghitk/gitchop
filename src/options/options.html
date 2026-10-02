@@ -37,7 +37,7 @@
           <button type="button" class="rail-item" data-page="pulls" data-needs-token>Pull requests</button>
           <button type="button" class="rail-item" data-page="news">News</button>
           <span class="rail-group">GitHub</span>
-          <button type="button" class="rail-item" data-page="token">Tokens</button>
+          <button type="button" class="rail-item" data-page="token">Sign-in</button>
           <button type="button" class="rail-item" data-page="index" data-needs-token>Index</button>
           <button type="button" class="rail-item" data-page="backup" data-needs-token>Backup</button>
         </nav>
@@ -101,12 +101,14 @@
 
           <div class="pane" data-page="token" hidden>
             <header class="pane-head">
-              <h2 class="pane-title">Tokens</h2>
+              <h2 class="pane-title">Sign-in</h2>
               <span class="status" id="sync-status" role="status" aria-live="polite"></span>
+              <span class="visually-hidden" id="signin-announce" role="status" aria-live="polite"></span>
             </header>
             <p class="intro">
-              A token unlocks private repository search, the pull requests, news from private
-              repositories, your contributions, and backing your links up to a secret gist.
+              Sign in with GitHub, or add tokens, to unlock private repository search, the pull
+              requests, news from private repositories, your contributions, and backing your links up
+              to a secret gist.
             </p>
             <section class="card">
               <div id="sync"></div>

@@ -12,6 +12,7 @@ import {
   sanitizeSettings as newsSettings,
   toggleRepo,
 } from '../lib/news.js';
+import { rankForOwner } from '../lib/repos.js';
 import { now } from './config.js';
 import { NEWS_CACHE_KEY } from './keys.js';
 import { loadTokens } from './tokens.js';
@@ -82,20 +83,23 @@ function newsIsStale(cache, settings, at = Date.now()) {
 }
 
 /**
- * A fine-grained token sees one owner, a classic one sees everything, and a public repository
- * needs none. So the token that worked for this repository last time goes first, the others
- * follow, and anonymous comes last — the lowest rate limit, and blind to private repositories.
- * A rejection or a not-found moves on to the next; anything else is the answer. When every try
- * fails, the first token's reason is the one reported — "the token cannot see it" says more than
- * the anonymous not-found that follows it.
+ * A fine-grained token sees one owner, a sign-in the owners the app is installed on, a classic one
+ * everything, and a public repository needs none. So the token that worked for this repository
+ * last time goes first, then those that reach its owner, narrowest first, then the rest, and
+ * anonymous comes last — the lowest rate limit, and blind to private repositories. A rejection or
+ * a not-found moves on to the next; anything else is the answer. When every try fails, the first
+ * token's reason is the one reported — "the token cannot see it" says more than the anonymous
+ * not-found that follows it.
  * @template T
  * @param {import('./tokens.js').OpenToken[]} tokens
+ * @param {string} repo
  * @param {string | null} preferredId
  * @param {(token: string | null) => Promise<T>} run
  * @returns {Promise<{ result: T, tokenId: string | null }>}
  */
-async function withRepoToken(tokens, preferredId, run) {
-  const ordered = [...tokens].sort((a, b) => Number(b.id === preferredId) - Number(a.id === preferredId));
+async function withRepoToken(tokens, repo, preferredId, run) {
+  const preferred = tokens.filter((entry) => entry.id === preferredId);
+  const ordered = [...preferred, ...rankForOwner(tokens.filter((entry) => entry.id !== preferredId), repo.split('/')[0])];
   let first = null;
   for (const entry of [...ordered, null]) {
     try {
@@ -149,7 +153,7 @@ export function refreshNews({ force = false } = {}) {
         continue;
       }
       try {
-        const { result, tokenId } = await withRepoToken(tokens, before?.tokenId ?? null, (token) => fetchDigest(repo, window, token));
+        const { result, tokenId } = await withRepoToken(tokens, repo, before?.tokenId ?? null, (token) => fetchDigest(repo, window, token));
         repos[key] = { ...result, tokenId, error: null, failedAt: null };
       } catch (error) {
         repos[key] = { ...(kept ?? emptyDigest(repo)), error: String(error.message ?? error), failedAt: now() };

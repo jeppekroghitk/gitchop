@@ -1,7 +1,7 @@
 import { api } from '../lib/links.js';
 import { age } from '../lib/pulls.js';
 import { SETTINGS_KEY as CONTRIB_SETTINGS_KEY, bestOf, fetchContributions, sanitizeSettings as contribSettings, yearWindow, yearWindows } from '../lib/contributions.js';
-import { now, readConfig } from './config.js';
+import { hasUsableToken, now, readConfig } from './config.js';
 import { CONTRIB_CACHE_KEY } from './keys.js';
 import { loadTokens } from './tokens.js';
 
@@ -139,7 +139,7 @@ export function refreshContributions() {
  */
 export async function contributionsState() {
   const [settings, config, cache] = await Promise.all([readContribSettings(), readConfig(), readContribCache()]);
-  const hasToken = config.tokens.length > 0;
+  const hasToken = hasUsableToken(config);
   const at = Date.now();
   const { year } = yearWindow(at);
   const current = cache && cache.year === year ? cache : null;
