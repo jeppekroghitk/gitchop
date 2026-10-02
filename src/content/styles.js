@@ -460,7 +460,9 @@ window.__gitchop.CSS = `
   }
 
   .gc-pop,
-  .gc-odo-reel {
+  .gc-odo-reel,
+  .gc-gauge,
+  .gc-gauge-fill {
     transition: none;
   }
 }
@@ -527,6 +529,115 @@ window.__gitchop.CSS = `
   gap: 6px;
   padding: 9px 12px;
   border-top: 1px solid var(--gc-line);
+}
+
+.gc-gauge {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  display: grid;
+  gap: 11px;
+  font: 400 10px/1 var(--gc-mono);
+  color: var(--gc-dim);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 240ms ease-out;
+}
+
+.gc-gauge[data-shown="true"] {
+  opacity: 1;
+}
+
+.gc-gauge[hidden] {
+  display: none;
+}
+
+.gc-gauge-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 1px;
+  font: 600 10px/1 var(--gc-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gc-heading);
+}
+
+.gc-gauge-who {
+  padding-top: 4px;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gc-heading);
+}
+
+.gc-gauge-row {
+  display: grid;
+  grid-template-columns: 168px 4ch;
+  gap: 5px 10px;
+  align-items: center;
+}
+
+.gc-gauge-line {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.gc-gauge-name {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.gc-gauge-meta {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.gc-gauge-bar {
+  position: relative;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.gc-gauge-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, var(--gc-blade-lo), var(--gc-blade-hi));
+  box-shadow: 0 0 7px var(--gc-blade-halo);
+  transition: width 700ms cubic-bezier(0.2, 0.7, 0.15, 1);
+}
+
+.gc-gauge-fill::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  right: 0;
+  width: 1px;
+  height: 7px;
+  background: var(--gc-glint-hi);
+  box-shadow: 0 0 6px var(--gc-glint-mid);
+}
+
+.gc-gauge-percent {
+  font-size: 12px;
+  text-align: right;
+  color: var(--gc-text);
+}
+
+.gc-gauge-row[data-high="true"] .gc-gauge-percent {
+  color: #ffb3a8;
+}
+
+.gc-gauge-row[data-high="true"] .gc-gauge-fill {
+  background: #ffb3a8;
+  box-shadow: 0 0 7px rgba(255, 179, 168, 0.6);
+}
+
+.gc-gauge-row[data-high="true"] .gc-gauge-fill::after {
+  background: #fff;
 }
 
 .gc-keys {
@@ -730,6 +841,14 @@ window.__gitchop.CSS = `
 
 .gc-icon[data-verdict="changes"] {
   color: #ffb3a8;
+}
+
+.gc-icon[data-done="true"] {
+  color: #a8e6b8;
+}
+
+.gc-lanes li[data-leaving="true"] .gc-item {
+  pointer-events: none;
 }
 
 .gc-lanes .gc-item--ghost {

@@ -26,6 +26,7 @@ jobs:
           node dev/odometer.test.mjs
           node dev/links.test.mjs
           node dev/gist.test.mjs
+          node dev/rate.test.mjs
           node dev/menu.test.mjs
 
       # There is no bundler between src/ and the browser, so this is where a mistyped path or a

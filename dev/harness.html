@@ -241,8 +241,10 @@
 
       // The pull requests, as the background would answer them. ?pulls=off starts with the switch
       // off, ?pulls=empty shows three quiet lanes, ?pulls=fail shows a token that cannot read pull
-      // requests, and ?pulls=cached skips the skeletons and paints a fresh snapshot straight away.
-      // Once refreshed, the snapshot stays: the next open paints from it, as the background's would.
+      // requests, and ?pulls=cached skips the skeletons and paints a snapshot straight away. Every
+      // open after the first finds one more of Waiting on you reviewed since — as a morning of
+      // reviewing would — so chop, Esc, chop is a row leaving the column each time, until the lane
+      // is empty and its quiet line stands.
       const LANES = [
         { id: 'reviewed', title: 'Feedback on your PRs', empty: 'no feedback on your PRs yet', slots: 3, all: 'https://github.com/pulls' },
         { id: 'needsReview', title: 'Waiting on you', empty: 'nothing waiting on you', slots: 3, all: 'https://github.com/pulls/review-requested' },
@@ -279,27 +281,33 @@
           pull('itk-dev/hoeringsportal', 305, 'Draft: attachments on replies', { private: true, draft: true, age: '4d' }),
         ],
       };
-      const pullsSettings = { enabled: params.get('pulls') === 'off' ? 0 : 1, badge: 1, drafts: 0 };
-      let pullsFilled = params.get('pulls') === 'cached';
+      const pullsMode = params.get('pulls') ?? 'on';
+      const pullsSettings = { enabled: pullsMode === 'off' ? 0 : 1, badge: 1, drafts: 0 };
+      let pullsReviewed = 0;
+      let pullsFilled = pullsMode === 'cached';
       let pullsFetchedAt = pullsFilled ? '2026-09-17T07:10:00.000Z' : null;
       function pullsAnswer(message) {
-        const mode = params.get('pulls') ?? 'on';
+        const mode = pullsMode;
         const hasToken = sync.tokens.length > 0;
         const head = { ok: true, settings: { ...pullsSettings }, hasToken, show: hasToken && pullsSettings.enabled === 1, partial: null };
         if (!head.show) return head;
         const bare = LANES.map((lane) => ({ ...lane, pulls: null, total: null }));
-        const filled = LANES.map((lane) => {
-          const pulls = mode === 'empty' ? [] : PULLS[lane.id];
-          return { ...lane, pulls, total: pulls.length };
-        });
+        const filled = () =>
+          LANES.map((lane) => {
+            let pulls = mode === 'empty' ? [] : PULLS[lane.id];
+            if (lane.id === 'needsReview') pulls = pulls.slice(pullsReviewed);
+            return { ...lane, pulls, total: pulls.length };
+          });
         if (message.type === 'gitchop:pulls:refresh') {
           const fail = 'The token cannot read pull requests. A classic token needs repo; a fine-grained one needs Pull requests: read-only.';
           if (mode === 'fail') return { ...head, stale: false, fetchedAt: null, fetchedAgo: '', error: fail, lanes: bare };
+          if (pullsFilled) pullsReviewed = Math.min(PULLS.needsReview.length, pullsReviewed + 1);
           pullsFilled = true;
           pullsFetchedAt = now();
-          return { ...head, stale: false, fetchedAt: pullsFetchedAt, fetchedAgo: 'now', error: null, lanes: filled };
+          return { ...head, stale: false, fetchedAt: pullsFetchedAt, fetchedAgo: 'now', error: null, lanes: filled() };
         }
-        if (pullsFilled) return { ...head, stale: false, fetchedAt: pullsFetchedAt, fetchedAgo: '2m', error: null, lanes: filled };
+        // The background asks again on every open, so a snapshot on file is always worth a refresh.
+        if (pullsFilled) return { ...head, stale: true, fetchedAt: pullsFetchedAt, fetchedAgo: '2m', error: null, lanes: filled() };
         return { ...head, stale: true, fetchedAt: null, fetchedAgo: '', error: null, lanes: bare };
       }
 
@@ -476,6 +484,35 @@
       const notify = (changes, area) => {
         for (const listener of storageListeners) listener(changes, area);
       };
+
+      // What GitHub says is left of each budget, as the background would have read it off the
+      // last answers: an hour's graphql and rest, a minute's search, ticking down as the menu asks
+      // — the pull requests on open, every search typed — the way the real table does when the
+      // background writes it. Without a token there are only the nameless budgets, which GitHub
+      // allows far less of.
+      const rateLeft = { graphql: 4912, core: 4988, search: 29, anonCore: 57, anonSearch: 9 };
+      const rateTurns = { graphql: Date.now() + 41 * 60000, core: Date.now() + 12 * 60000, search: Date.now() + 38000 };
+      function rateAnswer() {
+        const budget = (id, label, remaining, limit) => ({ id, label, remaining, limit, resetAt: rateTurns[id] });
+        if (sync.tokens.length > 0) {
+          const resources = [budget('graphql', 'graphql', rateLeft.graphql, 5000), budget('core', 'rest', rateLeft.core, 5000), budget('search', 'search', rateLeft.search, 30)];
+          return { ok: true, scopes: [{ id: 'jeppekrogh', label: 'jeppekrogh', resources }] };
+        }
+        const resources = [budget('core', 'rest', rateLeft.anonCore, 60), budget('search', 'search', rateLeft.anonSearch, 10)];
+        return { ok: true, scopes: [{ id: 'anonymous', label: 'no token', resources }] };
+      }
+      function rateTick(id, points = 1) {
+        // A minute's allowance that has turned starts over, as GitHub's does.
+        if (id === 'search' && rateTurns.search < Date.now()) {
+          rateTurns.search = Date.now() + 60000;
+          rateLeft.search = 30;
+          rateLeft.anonSearch = 10;
+        }
+        const key = sync.tokens.length > 0 ? id : id === 'core' ? 'anonCore' : id === 'search' ? 'anonSearch' : null;
+        if (!key || !(key in rateLeft)) return;
+        rateLeft[key] = Math.max(0, rateLeft[key] - points);
+        notify({ rateCache: { newValue: { ...rateLeft } } }, 'local');
+      }
       window.browser = window.chrome = {
         runtime: {
           lastError: undefined,
@@ -491,9 +528,11 @@
               Object.assign(store.panel, message.patch);
               return { ok: true, settings: { ...store.panel }, show: store.panel.enabled === 1 };
             }
+            if (message.type === 'gitchop:rate') return rateAnswer();
             if (message.type === 'gitchop:pulls') return pullsAnswer(message);
             if (message.type === 'gitchop:pulls:refresh') {
               await wait(900);
+              rateTick('graphql', 17);
               return pullsAnswer(message);
             }
             if (message.type === 'gitchop:pulls:settings') {
@@ -503,6 +542,7 @@
             if (message.type === 'gitchop:news') return newsAnswer(message, newsFilled);
             if (message.type === 'gitchop:news:refresh') {
               await wait(900);
+              rateTick('core', 5 * newsRepos.length);
               newsFilled = true;
               return newsAnswer(message, true);
             }
@@ -513,6 +553,7 @@
             if (message.type === 'gitchop:contributions') return contributionsAnswer(message);
             if (message.type === 'gitchop:contributions:refresh') {
               await wait(900);
+              rateTick('graphql', 1);
               return contributionsAnswer(message);
             }
             if (message.type === 'gitchop:contributions:settings') {
@@ -538,6 +579,7 @@
             if (settled) return settled;
             if (message.type !== 'gitchop:repos') return { ok: true };
             await new Promise((done) => setTimeout(done, 260));
+            rateTick('search');
             if (params.get('search') === 'fail') return { ok: false, error: 'GitHub rate-limited the search.' };
             const term = message.query.split('/').pop();
             return {
