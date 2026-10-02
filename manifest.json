@@ -6,8 +6,8 @@
   "permissions": ["storage", "alarms"],
   "host_permissions": ["https://github.com/*", "https://api.github.com/*"],
   "background": {
-    "service_worker": "src/background.js",
-    "scripts": ["src/background.js"],
+    "service_worker": "src/background/index.js",
+    "scripts": ["src/background/index.js"],
     "type": "module"
   },
   "content_scripts": [

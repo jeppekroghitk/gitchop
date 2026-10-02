@@ -40,7 +40,7 @@ export const BUNDLES = [
 export const HARNESS_COPY = 'dev/content.js';
 
 /** What the browser loads as modules straight from src/; whatever they import is carried loose. */
-const LOOSE = ['src/background.js', 'src/options/options.js'];
+const LOOSE = ['src/background/index.js', 'src/options/options.js'];
 
 /**
  * The oldest browsers the manifest admits (gecko.strict_min_version, and minimum_chrome_version in

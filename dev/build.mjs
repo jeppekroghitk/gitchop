@@ -170,7 +170,10 @@ function verify(dir, manifest) {
     }
 
     if (file.endsWith('.js') || file.endsWith('.mjs')) {
-      for (const [, specifier] of source.matchAll(/(?:^|[\s;])(?:import|export)[^'"]*?from\s*['"]([^'"]+)['"]/gm)) {
+      // The second alternative catches a bare side-effect import (import './x.js'), which has no
+      // from clause for the first to anchor on.
+      for (const [, named, bare] of source.matchAll(/(?:^|[\s;])(?:import|export)[^'"]*?from\s*['"]([^'"]+)['"]|(?:^|[\s;])import\s*['"]([^'"]+)['"]/gm)) {
+        const specifier = named ?? bare;
         if (!specifier.startsWith('.')) continue;
         const resolved = path.normalize(path.join(from, specifier));
         if (!has(resolved)) problems.push(`${file} imports a missing module: ${specifier}`);

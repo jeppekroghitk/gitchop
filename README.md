@@ -218,7 +218,7 @@ where two modules declare the same name esbuild numbers one of them (`node2`). P
 disagree about the background script, which reaches the browser unbundled.
 
 ```sh
-node dev/context.test.mjs && node dev/repos.test.mjs && node dev/effects.test.mjs && node dev/pulls.test.mjs && node dev/news.test.mjs && node dev/contributions.test.mjs && node dev/odometer.test.mjs && node dev/links.test.mjs && node dev/gist.test.mjs && node dev/rate.test.mjs && node dev/menu.test.mjs
+node dev/context.test.mjs && node dev/repos.test.mjs && node dev/effects.test.mjs && node dev/pulls.test.mjs && node dev/news.test.mjs && node dev/contributions.test.mjs && node dev/odometer.test.mjs && node dev/links.test.mjs && node dev/gist.test.mjs && node dev/rate.test.mjs && node dev/menu.test.mjs && node dev/background.test.mjs
 node dev/serve.mjs --open                              # the harness: the menu without installing, and Settings opens the real settings page
 ```
 

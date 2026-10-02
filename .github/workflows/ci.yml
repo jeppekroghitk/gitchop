@@ -33,6 +33,7 @@ jobs:
           node dev/gist.test.mjs
           node dev/rate.test.mjs
           node dev/menu.test.mjs
+          node dev/background.test.mjs
 
       # The background reaches the browser unbundled, so this is where a mistyped path or a broken
       # import is caught — the build refuses to package a manifest it cannot resolve, or a bundle
