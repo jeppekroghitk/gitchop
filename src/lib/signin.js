@@ -233,7 +233,7 @@ export async function listInstallations(token) {
     },
   });
   if (response.status === 401) throw new Error('GitHub no longer accepts this sign-in.');
-  if (!response.ok) throw new Error(`GitHub returned ${response.status} listing where gitchop is installed.`);
+  if (!response.ok) throw new Error(`GitHub returned ${response.status}.`);
   const body = await response.json();
   /** @type {Installation[]} */
   const found = [];

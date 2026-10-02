@@ -1,7 +1,6 @@
 import { api, loadLinks } from '../lib/links.js';
 import { ownersFromLinks, reaches } from '../lib/repos.js';
 import { INSTALL_URL, REVOKE_URL, missingInstalls } from '../lib/signin.js';
-import { show } from './pages.js';
 
 /** @import { Answer, Message, MessageType } from '../background/messages.js' */
 /** @import { SignInCode } from '../background/signin.js' */
@@ -71,6 +70,8 @@ let linkOwners = [];
 let installError = null;
 /** Whether an ask for the installations is under way, so the block can say it is asking. */
 let checking = false;
+/** Whether the sign-out is waiting on its confirmation, drawn in place under the account. */
+let confirmingOut = false;
 /** The control to hand focus to once the block next draws, after a change of phase. */
 /** @type {string | null} */
 let focusNext = null;
@@ -129,6 +130,25 @@ function link(text, href) {
   node.href = href;
   node.target = '_blank';
   node.rel = 'noreferrer';
+  return node;
+}
+
+/**
+ * The card's one quieter control, beside its buttons: for what is there when wanted but is not the
+ * way on — signing out, a token for one owner, managing access on GitHub. A link when it leads to
+ * GitHub, a button otherwise.
+ * @param {string} text
+ * @param {string} [href]
+ * @returns {HTMLElement}
+ */
+function quiet(text, href) {
+  if (href) {
+    const node = link(text, href);
+    node.className = 'quiet';
+    return node;
+  }
+  const node = element('button', 'quiet', text);
+  node.type = 'button';
   return node;
 }
 
@@ -285,7 +305,7 @@ async function pollOnce() {
       flow = { phase: 'error', interval: flow.interval, error: reply.error ?? 'GitHub would not finish the sign-in.' };
       stopTimers();
   }
-  focusNext = '.btn-primary';
+  focusNext = '.btn-primary, .signin-retry';
   announce(endedLine(flow));
   redraw();
 }
@@ -445,7 +465,7 @@ function codeBody(hooks) {
   const shown = element('output', 'signin-code', code.userCode);
   shown.setAttribute('aria-label', 'Your sign-in code');
   const copy = button('Copy');
-  copy.classList.add('signin-copy');
+  copy.classList.add('btn-edge', 'signin-copy');
   copy.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(code.userCode);
@@ -472,24 +492,28 @@ function codeBody(hooks) {
 }
 
 /**
- * What each way a flow can end says, and what its button says.
+ * What each way a flow can end says, what its button says, and for an error, the reason given:
+ * GitHub's own words, or gitchop's, said under a plain line rather than in place of one.
  * @param {Flow | null} current
- * @returns {[string, string]}
+ * @returns {{ line: string, again: string, reason?: string }}
  */
 function ending(current) {
-  /** @type {Record<string, [string, string]>} */
-  const said = {
-    expired: ['The code ran out before it was approved.', 'Get a new code'],
-    denied: ['Sign-in was declined on GitHub.', 'Try again'],
-    disabled: ['GitHub has sign-in by code switched off for gitchop. Use a personal access token for now.', 'Try again'],
-    error: [current?.error ?? 'Signing in did not work.', 'Try again'],
-  };
-  return said[current?.phase ?? 'error'] ?? said.error;
+  switch (current?.phase) {
+    case 'expired':
+      return { line: 'The code ran out before it was approved.', again: 'Get a new code' };
+    case 'denied':
+      return { line: 'Sign-in was declined on GitHub.', again: 'Try again' };
+    case 'disabled':
+      return { line: 'GitHub has sign-in by code switched off for gitchop. Use a personal access token for now.', again: 'Try again' };
+    default:
+      return { line: 'Sign-in did not finish.', again: 'Try again', reason: current?.error ?? undefined };
+  }
 }
 
 /** @param {Flow | null} current */
 function endedLine(current) {
-  return ending(current)[0];
+  const { line, reason } = ending(current);
+  return reason ? `${line} ${reason}` : line;
 }
 
 /**
@@ -498,8 +522,10 @@ function endedLine(current) {
  * @param {Hooks} hooks
  */
 function endedBody(hooks) {
-  const [line, again] = ending(flow);
-  const retry = button(again, { primary: true });
+  const { line, again, reason } = ending(flow);
+  // Switched off on GitHub, a retry is a long shot: the token form below is the way on.
+  const retry = button(again, { primary: flow?.phase !== 'disabled' });
+  retry.classList.add('signin-retry');
   retry.addEventListener('click', () => begin(hooks));
   const dismiss = button('Not now');
   dismiss.addEventListener('click', () => {
@@ -507,7 +533,9 @@ function endedBody(hooks) {
     focusNext = '.btn-primary';
     redraw();
   });
-  return [say(line, flow?.phase === 'error' ? 'error signin-error' : 'signin-status'), actionRow(retry, dismiss)];
+  const lead = say(line, 'signin-status');
+  if (reason) lead.append(element('span', 'flow-reason', reason));
+  return [lead, actionRow(retry, dismiss)];
 }
 
 /**
@@ -523,7 +551,6 @@ function idleBody(sync, hooks) {
   const go = button('Sign in with GitHub', { primary: true });
   go.addEventListener('click', () => begin(hooks));
   body.push(actionRow(go));
-  body.push(say('Counts only your public contributions. Private ones need a classic token with read:user.', 'flow-fine'));
   return body;
 }
 
@@ -569,8 +596,7 @@ function ownerRow(owner, reach, detail, hooks) {
   dot.setAttribute('aria-hidden', 'true');
   item.append(dot, handle(owner), element('span', 'flow-detail', detail));
   if (hooks) {
-    const pat = element('button', 'btn btn-inline', 'Use a token instead');
-    pat.type = 'button';
+    const pat = quiet('Use a token instead');
     pat.setAttribute('aria-label', `Use a token for @${owner} instead`);
     pat.addEventListener('click', () => hooks.openAdvanced(owner));
     item.append(pat);
@@ -579,46 +605,62 @@ function ownerRow(owner, reach, detail, hooks) {
 }
 
 /**
+ * Asks GitHub again where the app is installed, from a click, with the card's busy guard.
+ * @param {HTMLElement} node
+ * @param {Hooks} hooks
+ */
+function askAgain(node, hooks) {
+  return hooks.guard(node, 'token', async (flash) => {
+    installError = null;
+    try {
+      const result = await hooks.ask({ type: 'gitchop:signin:installations' });
+      flash('checked');
+      hooks.rerender(result);
+    } catch (error) {
+      installError = String(error.message ?? error);
+      redraw();
+      throw error;
+    }
+  });
+}
+
+/**
+ * The second step while it is not known where the app is installed: asking, not asked yet, or the
+ * ask failed. Until the list is known, asking again is the way on.
+ * @param {Hooks} hooks
+ */
+function unknownAccess(hooks) {
+  const title = 'Give gitchop access to your organisations';
+  if (checking) return stepItem({ number: 2, state: 'current', title, body: [say('Asking GitHub where gitchop is installed…', 'signin-status')] });
+  const again = button(installError ? 'Try again' : 'Check now', { primary: true });
+  again.addEventListener('click', () => askAgain(again, hooks));
+  const lead = say(installError ? 'Could not check where gitchop is installed.' : 'Not checked yet where gitchop is installed.', 'signin-status');
+  if (installError) lead.append(element('span', 'flow-reason', installError));
+  return stepItem({ number: 2, state: installError ? 'warn' : 'current', title, body: [lead, actionRow(again, linkButton('Install on GitHub', INSTALL_URL))] });
+}
+
+/**
+ * How many accounts gitchop reaches, said as the done step's title.
+ * @param {number} count
+ */
+function reachTitle(count) {
+  if (count === 1) return 'Access to your account';
+  if (count === 2) return 'Access to both accounts';
+  return `Access to all ${count} accounts`;
+}
+
+/**
  * Where the app is installed, as the second step. Owners without the app that a saved fine-grained
  * token reaches are not public-only: they count as reached, with no offer of a token they already
- * have. One install link serves every owner, since GitHub's page asks which account.
+ * have. One install link serves every owner, since GitHub's page asks which account. Once every
+ * owner is reached the step folds to one line, like the first.
  * @param {SyncState | null} sync
  * @param {TokenView} app
  * @param {Hooks} hooks
  * @returns {HTMLElement}
  */
 function accessStep(sync, app, hooks) {
-  const title = 'Give gitchop access to your organisations';
-  if (app.installations === null) {
-    /** @type {Node[]} */
-    const body = [];
-    if (checking) body.push(say('Asking GitHub where gitchop is installed…', 'signin-status'));
-    else {
-      body.push(
-        say(
-          installError ? `Could not check where gitchop is installed. ${installError}` : 'Not checked yet where gitchop is installed.',
-          installError ? 'error signin-error' : 'flow-text',
-        ),
-      );
-      const again = button(installError ? 'Ask again' : 'Check now');
-      again.addEventListener('click', () =>
-        hooks.guard(again, 'token', async (flash) => {
-          installError = null;
-          try {
-            const result = await hooks.ask({ type: 'gitchop:signin:installations' });
-            flash('checked');
-            hooks.rerender(result);
-          } catch (error) {
-            installError = String(error.message ?? error);
-            redraw();
-            throw error;
-          }
-        }),
-      );
-      body.push(actionRow(again, linkButton('Install on GitHub', INSTALL_URL)));
-    }
-    return stepItem({ number: 2, state: 'current', title, body });
-  }
+  if (app.installations === null) return unknownAccess(hooks);
 
   const installs = app.installations ?? [];
   const missing = missingInstalls(installs, candidates(sync, app));
@@ -629,23 +671,22 @@ function accessStep(sync, app, hooks) {
   const total = installs.length + missing.length;
   const reached = installs.length + covered.length;
 
-  if (uncovered.length === 0) {
+  if (uncovered.length === 0 && reached > 0) {
     const names = element('p', 'flow-summary');
     const all = [
       ...installs.map((install) => [install.owner, install.selection === 'all' ? '' : ' (chosen repositories)']),
       ...covered.map((owner) => [owner, ' (by token)']),
     ];
-    if (all.length === 0) names.append('Not installed anywhere yet.');
     all.forEach(([owner, note], at) => {
       if (at > 0) names.append(at === all.length - 1 ? ' and ' : ', ');
       names.append(handle(owner));
-      if (note) names.append(element('span', 'flow-detail', note));
+      if (note) names.append(note);
     });
     return stepItem({
       number: 2,
       state: 'done',
-      title: 'gitchop can read your organisations',
-      aside: [linkButton('Change on GitHub', INSTALL_URL)],
+      title: reachTitle(reached),
+      aside: [quiet('Manage on GitHub', INSTALL_URL)],
       body: [names],
     });
   }
@@ -665,51 +706,73 @@ function accessStep(sync, app, hooks) {
   return stepItem({
     number: 2,
     state: 'current',
-    title,
-    meta: `${reached} of ${total} reached`,
+    title: 'Give gitchop access to your organisations',
+    meta: total > 0 ? `${reached} of ${total} accounts` : null,
     body: [
       list,
       actionRow(install),
       say(
         'On GitHub, pick the account and its repositories; in an organisation you do not own, the install goes to its owners as a request. This list updates when you come back.',
-        'flow-fine',
+        'flow-hint',
       ),
     ],
   });
 }
 
 /**
- * The optional last step: the backup lives on its own page, and signing in is what it needed.
- * @param {SyncState | null} sync
- */
-function backupStep(sync) {
-  if (sync?.connected) {
-    const go = button('Open Backup');
-    go.addEventListener('click', () => show('backup'));
-    return stepItem({ number: 3, state: 'done', title: 'Your links are backed up to a gist', aside: [go] });
-  }
-  const go = button('Set up backup');
-  go.addEventListener('click', () => show('backup'));
-  return stepItem({ number: 3, state: 'todo', title: 'Back up your links to a gist', meta: 'optional', aside: [go] });
-}
-
-/**
  * @param {TokenView} app
  * @param {HTMLElement} node
  * @param {Hooks} hooks
- * @param {string | null} question
  */
-function signOut(app, node, hooks, question) {
+function signOut(app, node, hooks) {
   return hooks.guard(node, 'token', async (flash) => {
-    if (question && !confirm(question)) return;
     const result = await hooks.ask({ type: 'gitchop:token:remove', id: app.id });
     stopTimers();
     flow = null;
+    confirmingOut = false;
     focusNext = '.btn-primary';
     flash('signed out');
     announce('Signed out.');
     hooks.rerender(result);
   });
+}
+
+/**
+ * Asked before signing out, in place rather than in a dialog: what signing out here does, and the
+ * way to end the sign-in on GitHub too, which signs out here as it opens GitHub's page.
+ * @param {TokenView} app
+ * @param {Hooks} hooks
+ */
+function signOutConfirm(app, hooks) {
+  const box = element('div', 'signout');
+  box.append(say('gitchop forgets the sign-in on this browser. The app keeps its access on GitHub until you revoke it there.'));
+  const yes = button('Sign out', { primary: true });
+  yes.classList.add('signout-confirm');
+  yes.addEventListener('click', () => signOut(app, yes, hooks));
+  const revoke = linkButton('Sign out and revoke on GitHub', REVOKE_URL);
+  revoke.classList.add('signout-revoke');
+  // The link opens GitHub's page as it would anyway; the click signs out here as well.
+  revoke.addEventListener('click', () => signOut(app, revoke, hooks));
+  const no = quiet('Cancel');
+  no.addEventListener('click', () => {
+    confirmingOut = false;
+    focusNext = '.signout-open';
+    redraw();
+  });
+  box.append(actionRow(yes, revoke, no));
+  return box;
+}
+
+/** The one quiet Sign out, which asks in place before it does anything. */
+function signOutOpener() {
+  const out = quiet('Sign out');
+  out.classList.add('signout-open');
+  out.addEventListener('click', () => {
+    confirmingOut = true;
+    focusNext = '.signout-confirm';
+    redraw();
+  });
+  return out;
 }
 
 /**
@@ -719,18 +782,17 @@ function signOut(app, node, hooks, question) {
  * @param {Hooks} hooks
  */
 function signedInSteps(sync, app, hooks) {
-  const out = button('Sign out');
-  out.addEventListener('click', () =>
-    signOut(app, out, hooks, 'Sign out of GitHub here? gitchop forgets the sign-in; to end it on GitHub as well, revoke it there.'),
-  );
   const who = app.login ? handle(app.login) : element('span', null, 'your account');
+  /** @type {Node[]} */
+  const aside = confirmingOut ? [] : [signOutOpener()];
   const one = stepItem({
     number: 1,
     state: 'done',
     title: ['Signed in as ', who],
-    aside: [out, link('Revoke on GitHub', REVOKE_URL)],
+    aside,
+    body: confirmingOut ? [signOutConfirm(app, hooks)] : [],
   });
-  return [one, accessStep(sync, app, hooks), backupStep(sync)];
+  return [one, accessStep(sync, app, hooks)];
 }
 
 /**
@@ -740,16 +802,15 @@ function signedInSteps(sync, app, hooks) {
  * @param {Hooks} hooks
  */
 function needsSignInBody(app, hooks) {
-  const line = say(
-    `GitHub no longer accepts the sign-in${app.login ? ` for @${app.login}` : ''}: ${reasonFor(app.signInError)}. Your tokens and public data still work.`,
-  );
+  const line = say('GitHub no longer accepts the sign-in');
+  if (app.login) line.append(' for ', handle(app.login));
+  line.append(`: ${reasonFor(app.signInError)}. Your tokens and public data still work.`);
   // GitHub's own word for it, for whoever wants to look it up.
   if (app.signInError) line.title = app.signInError;
+  if (confirmingOut) return [line, signOutConfirm(app, hooks)];
   const again = button('Sign in again', { primary: true });
   again.addEventListener('click', () => begin(hooks));
-  const drop = button('Remove');
-  drop.addEventListener('click', () => signOut(app, drop, hooks, null));
-  return [line, actionRow(again, drop)];
+  return [line, actionRow(again, signOutOpener())];
 }
 
 /**
@@ -807,6 +868,7 @@ function firstStep(sync, hooks) {
 function contents(sync, hooks) {
   const app = appEntry(sync);
   const list = element('ol', 'flow');
+  if (!app || flow) confirmingOut = false;
   if (!flow && app && !app.needsSignIn) list.append(...signedInSteps(sync, app, hooks));
   else list.append(firstStep(sync, hooks), stepItem({ number: 2, state: 'todo', title: 'Give gitchop access to your organisations' }));
   return [list];
