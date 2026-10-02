@@ -30,3 +30,8 @@ tasks:
     desc: Package the extension for every browser, or one — `task build -- chrome --no-zip` for an unpacked one
     cmds:
       - node dev/build.mjs {{.CLI_ARGS | default "all"}}
+
+  watch:
+    desc: Build dist/<browser> unpacked and rebuild on every change — `task watch -- firefox` for one browser
+    cmds:
+      - node dev/build.mjs --watch {{.CLI_ARGS}}

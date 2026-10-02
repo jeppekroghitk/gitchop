@@ -200,21 +200,38 @@ which the token link asks Gists for when the owner is left blank, or a classic t
 
 ## Development
 
-No build step for the code — the files in `src/` are what runs. Packaging only chooses which
-`manifest.json` each browser gets, since the two disagree about the background script.
+The content script is ES modules that [esbuild](https://esbuild.github.io) bundles into each
+package — content scripts cannot import anything on their own — and so is the stage the settings
+page previews the chop with, so the repository root is not an extension you can load as it stands. Install the build's tools once, then
+build and load `dist/<browser>`:
+
+```sh
+npm ci                                                 # esbuild, pinned by package-lock.json
+node dev/build.mjs firefox --no-zip                    # dist/firefox: about:debugging → This Firefox → Load Temporary Add-on → its manifest.json
+node dev/build.mjs chrome --no-zip                     # dist/chrome: chrome://extensions → Load unpacked
+node dev/build.mjs firefox --watch                     # the same, rebuilt on every change; reload the extension to pick it up
+node dev/build.mjs all                                 # dist/gitchop-<version>-<browser>.<ext>
+```
+
+Nothing is minified and there are no source maps: the bundles are the sources joined up, though
+where two modules declare the same name esbuild numbers one of them (`node2`). Packaging also chooses which `manifest.json` each browser gets, since the two
+disagree about the background script, which reaches the browser unbundled.
 
 ```sh
 node dev/context.test.mjs && node dev/repos.test.mjs && node dev/effects.test.mjs && node dev/pulls.test.mjs && node dev/news.test.mjs && node dev/contributions.test.mjs && node dev/odometer.test.mjs && node dev/links.test.mjs && node dev/gist.test.mjs && node dev/rate.test.mjs && node dev/menu.test.mjs
-node dev/build.mjs all                                 # dist/gitchop-<version>-<browser>.<ext>
-node dev/build.mjs chrome --no-zip                     # unpacked, for chrome://extensions
-open dev/harness.html                                  # the menu, without installing
-node dev/serve.mjs --open                              # the same over http, where Settings opens the real settings page
+node dev/serve.mjs --open                              # the harness: the menu without installing, and Settings opens the real settings page
 ```
 
-With [Task](https://taskfile.dev) installed, the same three are `task test`, `task build` and
-`task harness`; `task` alone lists them.
+Over the server, the harness bundles the content script and the settings page's stage from `src/`
+on every request, so a reload runs whatever was just saved. Opened from `file://` — handy for
+headless screenshots — it runs `dev/content.js` instead, a git-ignored copy that every build and
+`node dev/bundle.mjs` write; the settings page needs the server either way.
 
-The build refuses to package a manifest whose files do not resolve, imports included — with no
-bundler in the way, that is the safety net.
+With [Task](https://taskfile.dev) installed, the same are `task test`, `task build`, `task watch`
+and `task harness`; `task` alone lists them.
+
+The build refuses to package a manifest whose files do not resolve, imports included, or a script
+that would not parse the way the browser loads it — the background is not bundled, so that is its
+safety net.
 
 [Releasing](dev/RELEASING.md) · [Changelog](CHANGELOG.md) · MIT

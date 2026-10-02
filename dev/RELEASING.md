@@ -25,7 +25,8 @@ neither rewards an extension that appears unattended.
 To build the same files locally:
 
 ```sh
-node dev/build.mjs all          # dist/gitchop-<version>-<browser>.<ext>
+npm ci                               # esbuild, once, at the version package-lock.json pins
+node dev/build.mjs all               # dist/gitchop-<version>-<browser>.<ext>
 node dev/build.mjs chrome --no-zip   # unpacked, for chrome://extensions
 ```
 
@@ -52,8 +53,27 @@ difference, and every API in use returns promises in both.
 
 The listing is at <https://addons.mozilla.org/en-US/firefox/addon/gitchop/>.
 
-Upload the `.xpi` under **Add-on Manager → Upload New Version**. Source code does not have to be
-attached: nothing here is minified, bundled or transpiled, so the reviewer already has what runs.
+Upload the `.xpi` under **Add-on Manager → Upload New Version**. The content script
+(`content.js`) and the settings page's preview stage (`src/options/stage.js`) are bundled by esbuild,
+and AMO counts bundled code as generated, so answer **yes** when it asks whether the source must be
+submitted, and attach it:
+
+```sh
+git archive --format=zip -o gitchop-<version>-source.zip v<version>
+```
+
+The archive carries `package.json` and `package-lock.json`, so the reviewer needs nothing else. The
+bundles are not minified and carry no source maps, so they read as the sources joined up; the only
+change esbuild makes is to number a name two modules both declare (`node2`). To reproduce them byte
+for byte, with Node 22 or later:
+
+```sh
+npm ci && node dev/build.mjs firefox
+```
+
+That builds `dist/firefox/` and `dist/gitchop-<version>-firefox.xpi` from exactly the tree in the
+archive, with the esbuild version `package-lock.json` pins. The background script, the rest of
+the settings page and `src/lib/` are not bundled and are in the package as they are in `src/`.
 
 The `data_collection_permissions` block in the Gecko settings is what AMO's disclosure form reads;
 if what gitchop sends to GitHub ever changes, that block changes with it.
@@ -90,6 +110,8 @@ ever worth the trouble; Brave uses the Chrome Web Store directly.
 ## Checking a package before it goes anywhere
 
 `dev/build.mjs` refuses to package a manifest whose files do not resolve — a mistyped
-`content_scripts` entry, a `<script src>` in the options page, or a broken relative `import`. With no
-bundler between `src/` and the browser, that is the only thing standing between a typo and a store
-upload, so treat a build failure as the release stopping.
+`content_scripts` entry, a `<script src>` in the options page, or a broken relative `import` — and
+a script that would not parse the way the browser loads it: the content script as a classic script,
+everything else as a module. esbuild refuses a broken import inside a bundle; the background is not
+bundled, so for it the build's own check is the only thing standing between a typo and a store
+upload. Treat a build failure as the release stopping.

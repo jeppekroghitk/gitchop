@@ -1,12 +1,24 @@
-window.__gitchop = window.__gitchop || {};
+import { api } from '../lib/links.js';
+import { KEY as EFFECTS_KEY, sanitize as sanitizeEffects } from '../lib/effects.js';
+import { createStage } from './chop.js';
+import { readContext } from './context.js';
+import { createMenu } from './menu.js';
 
-(() => {
-  const gc = window.__gitchop;
-  if (gc.installed) return;
-  gc.installed = true;
+/**
+ * Once per world, however many times the script is run into it. The mark is a property under a
+ * registered symbol on the content script's own global — Firefox's sandbox, Chrome's isolated
+ * world — not an attribute on the page: an attribute would be GitHub's to see, and would outlive
+ * this copy of the extension, so one reloaded under an open tab would find it and stand down. A
+ * plain Symbol() would be a new one on every run, and the registry's is the same one each time.
+ * The global rather than `window`, which in Firefox is the page's window seen through a wrapper.
+ */
+const INSTALLED = Symbol.for('gitchop.installed');
+if (!globalThis[INSTALLED]) {
+  Object.defineProperty(globalThis, INSTALLED, { value: true });
+  install();
+}
 
-  const api = globalThis.browser ?? globalThis.chrome;
-
+function install() {
   const state = { open: false, stage: null, menu: null, lastFocus: null };
 
   /**
@@ -53,19 +65,19 @@ window.__gitchop = window.__gitchop || {};
   // The chop must start the instant the key goes down, so the effect settings are read once up
   // front and kept fresh, never awaited in the keypress path. Both halves are guarded: settings
   // the tab cannot reach cost the user their settings, never the chop itself.
-  let effects = gc.EFFECTS.sanitize();
+  let effects = sanitizeEffects();
   (async () => {
     try {
-      const stored = await api.storage.sync.get(gc.EFFECTS.KEY);
-      effects = gc.EFFECTS.sanitize(stored[gc.EFFECTS.KEY]);
+      const stored = await api.storage.sync.get(EFFECTS_KEY);
+      effects = sanitizeEffects(stored[EFFECTS_KEY]);
     } catch {
       /* the defaults already loaded */
     }
   })();
   try {
     api.storage.onChanged.addListener((changes, area) => {
-      if (area !== 'sync' || !changes[gc.EFFECTS.KEY]) return;
-      effects = gc.EFFECTS.sanitize(changes[gc.EFFECTS.KEY].newValue);
+      if (area !== 'sync' || !changes[EFFECTS_KEY]) return;
+      effects = sanitizeEffects(changes[EFFECTS_KEY].newValue);
     });
     // The background writes the news edition a repository at a time, under this key in local
     // storage. A menu that is up repaints from the background's answer as each lands, so the
@@ -107,7 +119,7 @@ window.__gitchop = window.__gitchop || {};
     state.lastFocus = deepActiveElement();
 
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const stage = gc.createStage({ reduced, effects });
+    const stage = createStage({ reduced, effects });
     state.stage = stage;
     stage.chop();
     window.addEventListener('resize', onResize);
@@ -125,8 +137,8 @@ window.__gitchop = window.__gitchop || {};
     ]);
     if (state.stage !== stage) return;
 
-    const ctx = gc.readContext();
-    const menu = gc.createMenu({
+    const ctx = readContext();
+    const menu = createMenu({
       ctx,
       links,
       pulls: pulls?.ok ? pulls : null,
@@ -192,4 +204,4 @@ window.__gitchop = window.__gitchop || {};
     event.stopImmediatePropagation();
     openChop();
   }
-})();
+}

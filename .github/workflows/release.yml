@@ -24,6 +24,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+
+      # esbuild, for the bundles; package-lock.json pins it.
+      - name: Install the build's tools
+        run: npm ci
 
       - name: Tests
         run: |

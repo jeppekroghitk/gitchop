@@ -1,23 +1,15 @@
 import assert from 'node:assert';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import * as gc from '../src/content/context.js';
+import { isSafeUrl } from '../src/lib/links.js';
 
-const source = readFileSync(fileURLToPath(new URL('../src/content/context.js', import.meta.url)), 'utf8');
-
+// The page is read when the context is, not when the module loads, so these stand in for it.
 let branchInDom = '';
-const sandbox = {
-  window: {},
-  document: { querySelector: () => (branchInDom ? { textContent: branchInDom } : null) },
-  location: { pathname: '/', href: '' },
-};
-sandbox.window.__gitchop = undefined;
-
-const load = new Function('window', 'document', 'location', `${source}\nreturn window.__gitchop;`);
-const gc = load(sandbox.window, sandbox.document, sandbox.location);
+globalThis.document = { querySelector: () => (branchInDom ? { textContent: branchInDom } : null) };
+globalThis.location = { pathname: '/', href: '' };
 
 function at(pathname, branch = '') {
-  sandbox.location.pathname = pathname;
-  sandbox.location.href = `https://github.com${pathname}`;
+  location.pathname = pathname;
+  location.href = `https://github.com${pathname}`;
   branchInDom = branch;
   return gc.readContext();
 }
@@ -74,9 +66,10 @@ assert.equal(gc.repoFromUrl('https://github.com/a/b?tab=readme'), null, 'a query
 assert.equal(gc.repoFromUrl('https://gitlab.com/a/b'), null);
 assert.equal(gc.repoFromUrl('nonsense'), null);
 
-assert.equal(gc.isSafeUrl('https://github.com'), true);
-assert.equal(gc.isSafeUrl('javascript:alert(1)'), false);
-assert.equal(gc.isSafeUrl('nonsense'), false);
+// The menu's gate on every address it opens is the one the links are stored by.
+assert.equal(isSafeUrl('https://github.com'), true);
+assert.equal(isSafeUrl('javascript:alert(1)'), false);
+assert.equal(isSafeUrl('nonsense'), false);
 
 assert.equal(gc.shortenUrl('https://github.com/itk-dev/gitchop/actions'), 'itk-dev/gitchop/actions');
 assert.equal(gc.shortenUrl('https://example.com/x/'), 'example.com/x');

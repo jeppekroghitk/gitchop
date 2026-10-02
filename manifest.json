@@ -13,15 +13,7 @@
   "content_scripts": [
     {
       "matches": ["https://github.com/*"],
-      "js": [
-        "src/content/context.js",
-        "src/content/effects.js",
-        "src/content/styles.js",
-        "src/content/chop.js",
-        "src/content/odometer.js",
-        "src/content/menu.js",
-        "src/content/main.js"
-      ],
+      "js": ["content.js"],
       "run_at": "document_start",
       "all_frames": false
     }

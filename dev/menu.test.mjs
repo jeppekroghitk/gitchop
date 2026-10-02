@@ -1,15 +1,7 @@
 import assert from 'node:assert';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-
-// The menu is a classic content script; its pure parts hang off window.__gitchop once it has run.
-// The context script goes first, as on the page: the menu's link gate is defined there.
-const window = {};
-for (const file of ['context', 'menu']) {
-  const source = readFileSync(fileURLToPath(new URL(`../src/content/${file}.js`, import.meta.url)), 'utf8');
-  new Function('window', 'document', 'matchMedia', 'location', source)(window, {}, () => ({ matches: false }), {});
-}
-const { orderRepos, laneRows, diffRows, gaugeRows, countdown } = window.__gitchop;
+// The menu's pure parts, exported beside the menu itself; nothing in it touches the page until a
+// menu is made, so it imports under plain node.
+import { countdown, diffRows, gaugeRows, laneRows, orderRepos } from '../src/content/menu.js';
 
 const repo = (fullName, owned = true) => ({ fullName, url: `https://github.com/${fullName}`, description: '', private: false, archived: false, owned });
 const names = (list) => list.map((entry) => entry.fullName);

@@ -444,8 +444,8 @@
       // harness's browser object, so it shares one store and one background with the menu — a slider
       // moved there shapes the next chop here, a token removed there takes the pull requests out of
       // the menu. Its ES modules will not load from file://, which is what `node dev/serve.mjs` is
-      // for; ?settings opens it on load. Once made, the frame is hidden rather than torn down, so the
-      // listeners it registered stay valid.
+      // for — the server also makes the stage its Preview plays; ?settings opens it on load. Once
+      // made, the frame is hidden rather than torn down, so the listeners it registered stay valid.
       const SERVED = location.protocol === 'http:' || location.protocol === 'https:';
       let manifest = { name: 'gitchop for GitHub', version: 'harness' };
       let frame = null;
@@ -650,13 +650,12 @@
 
       if (params.has('settings')) openSettings();
     </script>
-    <script src="../src/content/context.js"></script>
-    <script src="../src/content/effects.js"></script>
-    <script src="../src/content/styles.js"></script>
-    <script src="../src/content/chop.js"></script>
-    <script src="../src/content/odometer.js"></script>
-    <script src="../src/content/menu.js"></script>
-    <script src="../src/content/main.js"></script>
+    <!--
+      The content script as a package carries it: one bundle. dev/serve.mjs makes it from
+      src/content on every request; from file:// it is the git-ignored copy that `node dev/bundle.mjs`
+      and every build write next to this page, so a still taken that way runs the last build.
+    -->
+    <script src="content.js" onerror="document.getElementById('state').textContent = 'no menu yet: node dev/bundle.mjs, or node dev/serve.mjs'"></script>
     <script>
       // harness.html?autochop&colour=210&epicness=90 chops on load, so a reload replays the effect.
       if (params.has('autochop')) document.getElementById('chop').click();

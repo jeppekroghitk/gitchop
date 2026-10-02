@@ -1,12 +1,11 @@
+import { DEFAULTS, KEY, SLIDERS, resolve, sanitize } from '../lib/effects.js';
 import { api } from '../lib/links.js';
-
-/**
- * The chop itself is previewed with the real thing: options.html loads the content-script stage
- * (effects.js, styles.js, chop.js) as classic scripts, so this card can run the exact animation
- * the next keypress on GitHub will play — over the settings page instead of over GitHub.
- */
-const gc = window.__gitchop;
-const { KEY, SLIDERS, DEFAULTS, sanitize, resolve } = gc.EFFECTS;
+// The chop itself is previewed with the real thing: this card runs the content script's own stage,
+// so it plays the exact animation the next keypress on GitHub will — over the settings page
+// instead of over GitHub. The stage brings its stylesheet in as text, which only the bundler can
+// do, so stage.js is src/content/chop.js bundled (dev/bundle.mjs) and exists only in a package
+// and on the dev server, never in src/.
+import { createStage } from './stage.js';
 
 const host = document.getElementById('effects');
 const statusEl = document.getElementById('effects-status');
@@ -242,7 +241,7 @@ function preview() {
   const fx = sanitize(effects);
   const play = resolve(fx);
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const running = gc.createStage({ reduced, effects: fx });
+  const running = createStage({ reduced, effects: fx });
   stage = running;
 
   let linger = null;

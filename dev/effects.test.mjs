@@ -1,12 +1,5 @@
 import assert from 'node:assert';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-
-const source = readFileSync(fileURLToPath(new URL('../src/content/effects.js', import.meta.url)), 'utf8');
-
-const window = {};
-new Function('window', source)(window);
-const { EFFECTS } = window.__gitchop;
+import * as EFFECTS from '../src/lib/effects.js';
 
 assert.deepEqual(EFFECTS.sanitize(), EFFECTS.DEFAULTS, 'nothing stored means the classic effect');
 assert.deepEqual(EFFECTS.sanitize(null), EFFECTS.DEFAULTS);
@@ -22,6 +15,14 @@ assert.equal(EFFECTS.sanitize({ epicness: {} }).epicness, 0, 'a non-number falls
 assert.equal(EFFECTS.sanitize({ enabled: 0 }).enabled, 0, 'the switch can be stored off');
 assert.equal(EFFECTS.sanitize({ enabled: true }).enabled, 1, 'a boolean from older storage still counts');
 assert.equal(EFFECTS.sanitize({ enabled: 7 }).enabled, 1, 'the switch clamps to on/off');
+
+// The same function holds the gist's copy before it reaches storage, and the gist is a stranger's
+// until then: only the sliders' own keys come through, each a whole number on its own scale.
+const hostile = JSON.parse('{"__proto__": {"enabled": 0}, "constructor": 1, "speed": 1e400, "colour": {"hue": 9}, "x": 1}');
+assert.deepEqual(EFFECTS.sanitize(hostile), EFFECTS.DEFAULTS, 'nothing but the sliders, and nothing off their scales');
+assert.deepEqual(Object.keys(EFFECTS.sanitize(hostile)), EFFECTS.SLIDERS.map((slider) => slider.id), 'exactly the sliders, in their order');
+assert.deepEqual(EFFECTS.sanitize([1, 2, 3]), EFFECTS.DEFAULTS, 'a list is no settings at all');
+assert.equal(EFFECTS.KEY, 'effects', 'the storage key the gist and the content script share');
 
 // The whole effect can be switched off, and the switch leads the card.
 const toggleSpec = EFFECTS.SLIDERS[0];

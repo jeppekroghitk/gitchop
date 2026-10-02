@@ -21,6 +21,7 @@ import {
   mergeLanes,
   sanitizeSettings as pullsSettings,
 } from './lib/pulls.js';
+import { KEY as EFFECTS_KEY, sanitize as sanitizeEffects } from './lib/effects.js';
 import { ANONYMOUS, noteRate, presentRate, readRate, scopeOf } from './lib/rate.js';
 import {
   SETTINGS_KEY as NEWS_SETTINGS_KEY,
@@ -65,8 +66,6 @@ const PULLS_FRESH = 5 * 1000;
 const PULLS_EVERY_MINUTES = 5;
 const PUSH_DELAY = 1500;
 const MAX_LINKS = 200;
-/** Where the chop keeps its sliders. effects.js owns the key, and is a classic script this module cannot import. */
-const EFFECTS_KEY = 'effects';
 
 /**
  * The gist is the durable copy; storage.sync is the working copy the menu reads, so the menu opens
@@ -278,21 +277,6 @@ async function withGistToken(run) {
   throw failure ?? new Error('No saved token could reach the gist.');
 }
 
-/**
- * The chop's settings belong to effects.js, which clamps every number to its slider whenever it
- * reads them and cannot be imported here. So the gist's copy is only held to a shape: a plain
- * object of a few numbers, nothing that could be anything else.
- */
-function sanitizeEffects(raw) {
-  const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-  const effects = {};
-  for (const [key, value] of Object.entries(source).slice(0, 16)) {
-    const number = Number(value);
-    if (Number.isFinite(number)) effects[key.slice(0, 32)] = number;
-  }
-  return effects;
-}
-
 function sanitizeLinks(raw) {
   return (Array.isArray(raw) ? raw : [])
     .filter((link) => link && typeof link === 'object')
@@ -306,8 +290,8 @@ function sanitizeLinks(raw) {
  * gist is the one input gitchop does not author — a secret gist is unlisted rather than private,
  * and an id can be adopted from anywhere — so what comes back is a stranger's until sanitized: a
  * link that is not http(s) is dropped rather than stored, the list is capped, a switch is on or
- * off, a repository is a well-formed name. The same functions read the local copy, so the two
- * compare as equals when they are.
+ * off, a slider of the chop's is a whole number on its own scale, a repository is a well-formed
+ * name. The same functions read the local copy, so the two compare as equals when they are.
  */
 const BACKED_UP = {
   [LINKS_KEY]: sanitizeLinks,
@@ -805,8 +789,8 @@ function refreshNews({ force = false } = {}) {
 
 /**
  * The edition as the menu draws it: one section per subscribed repository, in the order they were
- * subscribed, each already told as prose — the menu is a classic content script and cannot import
- * the module that writes it. `prose` is null for a repository the edition has not reached yet,
+ * subscribed, each already told as prose — the background writes the edition, and the menu only
+ * draws what it is handed. `prose` is null for a repository the edition has not reached yet,
  * which is the menu's cue to draw skeletons; empty prose is a quiet day, or the failure that
  * stands where the day would be.
  */

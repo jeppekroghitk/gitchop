@@ -1,0 +1,16 @@
+{
+  "name": "gitchop",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test dev/",
+    "build": "node dev/build.mjs all"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "esbuild": "0.28.2",
+    "eslint": "10.11.0",
+    "globals": "17.13.0",
+    "typescript": "7.0.2"
+  }
+}

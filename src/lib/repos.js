@@ -10,7 +10,7 @@ export const REPO_LIMIT = 10;
 const OWNER_IN_URL = /^https?:\/\/(?:www\.)?github\.com\/([A-Za-z0-9._-]+)/i;
 
 /** First path segments on github.com that are features, not accounts. */
-const NOT_OWNERS = new Set([
+export const NOT_OWNERS = new Set([
   'about', 'account', 'apps', 'codespaces', 'collections', 'contact', 'copilot', 'dashboard',
   'discussions', 'enterprise', 'events', 'explore', 'features', 'issues', 'login', 'logout',
   'marketplace', 'new', 'notifications', 'organizations', 'orgs', 'pricing', 'pulls', 'search',

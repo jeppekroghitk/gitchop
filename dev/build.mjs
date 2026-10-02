@@ -11,14 +11,21 @@
  * A single manifest carrying both keys does run on current Chrome, but leaves unrecognised-key
  * warnings in both stores' review tools, so the packages are built separately instead.
  *
- * Usage: node dev/build.mjs [firefox|chrome|all] [--no-zip]
+ * The content script, and the stage the settings page previews it with, are bundled into each
+ * package as well (dev/bundle.mjs says why), so the repository root is not an extension on its
+ * own: the manifest names `content.js`, and the settings page imports `stage.js`, which only a
+ * package has. Load `dist/<browser>` unpacked instead.
+ *
+ * Usage: node dev/build.mjs [firefox|chrome|all] [--no-zip] [--watch]
+ *   --watch builds unpacked, then again whenever something under src/, icons/ or the manifest
+ *   changes; reload the extension in the browser to pick it up.
  */
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, watch, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
+import { bundleAll, root, writeHarnessCopy } from './bundle.mjs';
 
-const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const dist = path.join(root, 'dist');
 
 /** Everything the browser needs, and nothing else — no dev/, no tests, no repo furniture. */
@@ -53,10 +60,7 @@ const TARGETS = {
   },
 };
 
-function fail(message) {
-  console.error(`build: ${message}`);
-  process.exit(1);
-}
+class BuildError extends Error {}
 
 function isJunk(name) {
   return JUNK_NAMES.has(name) || JUNK_SUFFIXES.some((suffix) => name.endsWith(suffix));
@@ -74,7 +78,27 @@ function walk(dir, base = dir) {
   return found;
 }
 
-function stage(target, manifest) {
+/** A path as esbuild's metafile spells it: relative to the repository, forward slashes. */
+function repoPath(full) {
+  return path.relative(root, full).split(path.sep).join('/');
+}
+
+/** The copy makes every folder it walks into, so one whose files all went into a bundle is left empty. */
+function prune(dir) {
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry);
+    if (!statSync(full).isDirectory()) continue;
+    prune(full);
+    if (readdirSync(full).length === 0) rmSync(full, { recursive: true });
+  }
+}
+
+/**
+ * The sources as they are, less whatever reaches the browser only inside a bundle, and then the
+ * bundles themselves. A module the package no longer loads is not carried along for the ride: a
+ * reviewer reading the package should find exactly what runs.
+ */
+function stage(target, manifest, { bundles, only }) {
   const dir = path.join(dist, target);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
@@ -82,8 +106,16 @@ function stage(target, manifest) {
   for (const item of SOURCES) {
     cpSync(path.join(root, item), path.join(dir, item), {
       recursive: true,
-      filter: (source) => !isJunk(path.basename(source)),
+      filter: (source) => !isJunk(path.basename(source)) && !only.has(repoPath(source)),
     });
+  }
+
+  prune(dir);
+
+  for (const built of bundles) {
+    const file = path.join(dir, built.out);
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, built.text);
   }
 
   writeFileSync(path.join(dir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
@@ -91,19 +123,28 @@ function stage(target, manifest) {
 }
 
 /**
- * There is no bundler between the source and the browser, so a mistyped path is only discovered
- * when the extension is already installed. These are the three ways that happens: a manifest entry,
- * a script or stylesheet in an options page, and an ES import between modules. A script that does
- * not parse is the fourth — the tests load the libraries but not the content scripts or the options
- * page — so every script is handed to node to check, module or classic alike.
+ * Only part of the code goes through the bundler — the background and what it imports reach the
+ * browser as they are in src/ — so a mistyped path can still be discovered only once the extension
+ * is installed. These are the three ways that happens: a manifest entry, a script or stylesheet in
+ * an options page, and an ES import between modules. A script that does not parse is the fourth —
+ * the tests load the libraries but not the bundles — so every script is parsed here, and parsed
+ * the way the browser will: a content script, or a background that is not a module, as a classic
+ * script, where an `import` left in it is the error it would be on the page; everything else as a
+ * module.
  */
 function verify(dir, manifest) {
   const problems = [];
   const has = (relative) => existsSync(path.join(dir, relative));
 
+  const contentScripts = (manifest.content_scripts ?? []).flatMap((script) => script.js ?? []);
+  const worker = manifest.background?.service_worker;
+  const scripts = manifest.background?.scripts ?? [];
+  const modular = manifest.background?.type === 'module';
+  const classic = new Set([...contentScripts, ...(modular ? [] : [worker, ...scripts])].filter(Boolean).map(path.normalize));
+
   const declared = [
-    manifest.background?.service_worker,
-    ...(manifest.background?.scripts ?? []),
+    worker,
+    ...scripts,
     manifest.options_ui?.page,
     manifest.action?.default_popup,
     ...Object.values(manifest.icons ?? {}),
@@ -134,25 +175,23 @@ function verify(dir, manifest) {
         const resolved = path.normalize(path.join(from, specifier));
         if (!has(resolved)) problems.push(`${file} imports a missing module: ${specifier}`);
       }
-      try {
-        execFileSync(process.execPath, ['--check', path.join(dir, file)], { stdio: ['ignore', 'ignore', 'pipe'] });
-      } catch (error) {
-        const said = String(error.stderr ?? '').split('\n').find((line) => /Error/.test(line)) ?? 'it does not parse';
-        problems.push(`${file} does not parse: ${said.trim()}`);
+      if (classic.has(path.normalize(file))) {
+        try {
+          new vm.Script(source, { filename: file });
+        } catch (error) {
+          problems.push(`${file} does not parse as a classic script: ${error.message}`);
+        }
+      } else {
+        try {
+          execFileSync(process.execPath, ['--input-type=module', '--check'], { input: source, stdio: ['pipe', 'ignore', 'pipe'] });
+        } catch (error) {
+          const said = String(error.stderr ?? '').split('\n').find((line) => /Error/.test(line)) ?? 'it does not parse';
+          problems.push(`${file} does not parse: ${said.trim()}`);
+        }
       }
     }
   }
 
-  // A module cannot import anything when the browser loads it as a classic script.
-  const worker = manifest.background?.service_worker;
-  const scripts = manifest.background?.scripts ?? [];
-  const modular = manifest.background?.type === 'module';
-  if (!modular) {
-    const entry = worker ?? scripts[0];
-    if (entry && /(?:^|[\s;])import\s/m.test(readFileSync(path.join(dir, entry), 'utf8'))) {
-      problems.push(`${entry} uses ES imports but background.type is not "module"`);
-    }
-  }
   if (!worker && scripts.length === 0) problems.push('no background script declared');
 
   return problems;
@@ -165,15 +204,15 @@ function zip(dir, output) {
   return statSync(output).size;
 }
 
-function build(target, { archive }) {
+function build(target, built, { archive }) {
   const spec = TARGETS[target];
   const manifest = spec.manifest(JSON.parse(readFileSync(path.join(root, 'manifest.json'), 'utf8')));
-  const dir = stage(target, manifest);
+  const dir = stage(target, manifest, built);
 
   const problems = verify(dir, manifest);
   if (problems.length > 0) {
     for (const problem of problems) console.error(`  ${target}: ${problem}`);
-    fail(`${target} package is not loadable`);
+    throw new BuildError(`${target} package is not loadable`);
   }
 
   const files = walk(dir).length;
@@ -187,14 +226,69 @@ function build(target, { archive }) {
   console.log(`${target.padEnd(8)} ${path.relative(root, output)}  (${files} files, ${Math.round(size / 1024)} KB)`);
 }
 
+/** Bundles once for every target asked for: the output does not depend on the browser. */
+async function buildAll(requested, options) {
+  let built;
+  try {
+    built = await bundleAll();
+  } catch (error) {
+    console.error(String(error.message ?? error));
+    throw new BuildError('the bundler refused the sources');
+  }
+  for (const target of requested) build(target, built, options);
+  await writeHarnessCopy(built.bundles.find((spec) => spec.out === 'content.js').text);
+}
+
 const args = process.argv.slice(2);
-const archive = !args.includes('--no-zip');
+const watching = args.includes('--watch');
+const archive = !args.includes('--no-zip') && !watching;
 const named = args.filter((arg) => !arg.startsWith('-'));
 const requested = named.length === 0 || named.includes('all') ? Object.keys(TARGETS) : named;
 
 for (const target of requested) {
-  if (!TARGETS[target]) fail(`unknown target "${target}" — expected ${Object.keys(TARGETS).join(', ')} or all`);
+  if (!TARGETS[target]) {
+    console.error(`build: unknown target "${target}" — expected ${Object.keys(TARGETS).join(', ')} or all`);
+    process.exit(1);
+  }
 }
 
 mkdirSync(dist, { recursive: true });
-for (const target of requested) build(target, { archive });
+
+if (!watching) {
+  try {
+    await buildAll(requested, { archive });
+  } catch (error) {
+    if (!(error instanceof BuildError)) throw error;
+    console.error(`build: ${error.message}`);
+    process.exit(1);
+  }
+} else {
+  // A failed build in watch mode says so and waits for the fix, rather than ending the watch.
+  let timer = null;
+  let running = Promise.resolve();
+  const again = () => {
+    running = running.then(async () => {
+      try {
+        await buildAll(requested, { archive: false });
+      } catch (error) {
+        if (!(error instanceof BuildError)) throw error;
+        console.error(`build: ${error.message}`);
+      }
+    });
+  };
+  again();
+  for (const item of SOURCES) {
+    const full = path.join(root, item);
+    const watcher = watch(full, { recursive: statSync(full).isDirectory() }, (event, name) => {
+      if (name && isJunk(path.basename(String(name)))) return;
+      // An editor saves in bursts; one build for the lot.
+      clearTimeout(timer);
+      timer = setTimeout(again, 120);
+    });
+    watcher.on('error', (error) => {
+      console.error(`build: cannot watch ${item} (${error.code ?? error.message}); build without --watch instead`);
+      process.exit(1);
+    });
+  }
+  console.log('watching src/, icons/ and manifest.json — Ctrl-C to stop');
+}

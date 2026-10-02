@@ -14,6 +14,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+
+      # esbuild, for the bundles; package-lock.json pins it.
+      - name: Install the build's tools
+        run: npm ci
 
       - name: Tests
         run: |
@@ -29,8 +34,9 @@ jobs:
           node dev/rate.test.mjs
           node dev/menu.test.mjs
 
-      # There is no bundler between src/ and the browser, so this is where a mistyped path or a
-      # broken import is caught — the build refuses to package a manifest it cannot resolve.
+      # The background reaches the browser unbundled, so this is where a mistyped path or a broken
+      # import is caught — the build refuses to package a manifest it cannot resolve, or a bundle
+      # esbuild cannot make.
       - name: Package for every browser
         run: node dev/build.mjs all
 

@@ -1,8 +1,5 @@
 import assert from 'node:assert';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-
-const source = readFileSync(fileURLToPath(new URL('../src/content/odometer.js', import.meta.url)), 'utf8');
+import { createOdometer } from '../src/content/odometer.js';
 
 /**
  * Just enough of a DOM for the reels: elements with children, a class, a style, a dataset, and
@@ -55,12 +52,13 @@ class Element {
   }
 }
 
+// The odometer reaches for the page only when one is made, so the globals it reads can be set,
+// and the reduced-motion preference changed, just before each.
+globalThis.document = { createElement: (tag) => new Element(tag) };
+
 function load({ reduced = false } = {}) {
-  const window = {};
-  const document = { createElement: (tag) => new Element(tag) };
-  const matchMedia = () => ({ matches: reduced });
-  new Function('window', 'document', 'matchMedia', source)(window, document, matchMedia);
-  return window.__gitchop.createOdometer();
+  globalThis.matchMedia = () => ({ matches: reduced });
+  return createOdometer();
 }
 
 // The strip is a blank and then one more run of the digits than the last reel has turns — as many
