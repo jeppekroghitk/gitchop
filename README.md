@@ -202,8 +202,8 @@ which the token link asks Gists for when the owner is left blank, or a classic t
 
 The content script is ES modules that [esbuild](https://esbuild.github.io) bundles into each
 package — content scripts cannot import anything on their own — and so is the stage the settings
-page previews the chop with, so the repository root is not an extension you can load as it stands. Install the build's tools once, then
-build and load `dist/<browser>`:
+page previews the chop with, so the repository root is not an extension you can load as it
+stands. Install the build's tools once, then build and load `dist/<browser>`:
 
 ```sh
 npm ci                                                 # esbuild, TypeScript and ESLint, pinned by package-lock.json
@@ -214,8 +214,9 @@ node dev/build.mjs all                                 # dist/gitchop-<version>-
 ```
 
 Nothing is minified and there are no source maps: the bundles are the sources joined up, though
-where two modules declare the same name esbuild numbers one of them (`node2`). Packaging also chooses which `manifest.json` each browser gets, since the two
-disagree about the background script, which reaches the browser unbundled.
+where two modules declare the same name esbuild numbers one of them (`node2`). Packaging also
+chooses which `manifest.json` each browser gets, since the two disagree about the background
+script, which reaches the browser unbundled.
 
 ```sh
 npm test                                               # node --test over every dev/*.test.mjs; one file alone is node --test dev/<name>.test.mjs
