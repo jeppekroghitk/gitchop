@@ -21,6 +21,7 @@ import {
   mergeLanes,
   sanitizeSettings as pullsSettings,
 } from './lib/pulls.js';
+import { ANONYMOUS, noteRate, presentRate, readRate, scopeOf } from './lib/rate.js';
 import {
   SETTINGS_KEY as NEWS_SETTINGS_KEY,
   describeSince,
@@ -46,14 +47,21 @@ import {
 const CONFIG_KEY = 'sync';
 const INDEX_KEY = 'index';
 const PULLS_CACHE_KEY = 'pullsCache';
+const RATE_KEY = 'rateCache';
 const PULLS_ALARM = 'gitchop:pulls';
 const NEWS_CACHE_KEY = 'newsCache';
 const NEWS_ALARM = 'gitchop:news';
 const CONTRIB_CACHE_KEY = 'contributionsCache';
 /** How long the year's count answers the menu without a request; nothing but the menu shows it, so no alarm. */
 const CONTRIB_FRESH = 5 * 60 * 1000;
-/** How long a snapshot answers the menu without a request; the alarm keeps it about this fresh. */
-const PULLS_FRESH = 60 * 1000;
+/**
+ * How long a snapshot answers the menu without a request: the key pressed twice within a breath,
+ * or an alarm that has just landed. Anything older is asked for again on every open — the point of
+ * opening the menu after a review is to see the list as it stands, and a request in flight is
+ * shared with whoever else asks.
+ */
+const PULLS_FRESH = 5 * 1000;
+/** The alarm's own cadence, for the badge: right before the key is pressed, not only after. */
 const PULLS_EVERY_MINUTES = 5;
 const PUSH_DELAY = 1500;
 const MAX_LINKS = 200;
@@ -128,9 +136,77 @@ async function loadTokens() {
         secret = null;
       }
     }
-    if (secret) opened.push({ ...entry, secret });
+    if (secret) {
+      opened.push({ ...entry, secret });
+      rateScopes.set(secret, scopeOf(entry));
+    }
   }
   return opened;
+}
+
+/**
+ * What is left of GitHub's budgets. Every answer from GitHub says, in its headers, how much of the
+ * allowance for the budget it was charged to remains and when that allowance comes back — so the
+ * budgets are read off the answers here, in the one place every request passes, rather than in
+ * each of the modules that ask, and the gauge in the corner of the menu costs no request of its
+ * own. GitHub meters by user, not by token, so readings are kept by the login a token belongs to,
+ * and requests made with no token under a name of their own. The table is written to storage.local
+ * so a menu that is up can follow it as its own requests land, and so it survives the background
+ * being stopped. The modules that ask GitHub call the global fetch, and this is that fetch.
+ */
+const rateScopes = new Map();
+let rateTable = {};
+const rateReady = api.storage.local
+  .get(RATE_KEY)
+  .then((stored) => {
+    const table = stored[RATE_KEY];
+    rateTable = table && typeof table === 'object' ? table : {};
+  })
+  .catch(() => {});
+let rateWrite = null;
+
+function rateScopeOf(init) {
+  const auth = new Headers(init?.headers ?? {}).get('authorization') ?? '';
+  const secret = auth.replace(/^(bearer|token)\s+/i, '').trim();
+  return (secret && rateScopes.get(secret)) || ANONYMOUS;
+}
+
+async function noteAnswer(input, init, response) {
+  let host = '';
+  try {
+    host = new URL(typeof input === 'string' ? input : input?.url).host;
+  } catch {
+    return;
+  }
+  if (host !== 'api.github.com') return;
+  const reading = readRate(response.headers);
+  if (!reading) return;
+  const scope = rateScopeOf(init);
+  await rateReady;
+  const next = noteRate(rateTable, scope, reading);
+  if (next === rateTable) return;
+  rateTable = next;
+  // Written a beat behind, so an index build's hundreds of answers are a few writes, not hundreds.
+  if (!rateWrite) {
+    rateWrite = setTimeout(() => {
+      rateWrite = null;
+      api.storage.local.set({ [RATE_KEY]: rateTable }).catch(() => {});
+    }, 250);
+  }
+}
+
+const nativeFetch = globalThis.fetch.bind(globalThis);
+globalThis.fetch = async (input, init) => {
+  const response = await nativeFetch(input, init);
+  noteAnswer(input, init, response).catch(() => {});
+  return response;
+};
+
+/** The budgets as the menu paints them: this profile's tokens by login, in their order, and the nameless requests after. */
+async function rateState() {
+  await rateReady;
+  const config = await readConfig();
+  return { scopes: presentRate(rateTable, config.tokens) };
 }
 
 async function storeTokens(entries) {
@@ -370,7 +446,8 @@ async function removeToken({ id }) {
     patch.gistId = null;
     patch.gistTokenId = null;
     patch.dirty = false;
-    await api.storage.local.remove([INDEX_KEY, PULLS_CACHE_KEY, NEWS_CACHE_KEY, CONTRIB_CACHE_KEY]);
+    await api.storage.local.remove([INDEX_KEY, PULLS_CACHE_KEY, NEWS_CACHE_KEY, CONTRIB_CACHE_KEY, RATE_KEY]);
+    rateTable = {};
   } else if (config.gistTokenId === id) {
     patch.gistTokenId = null;
   }
@@ -474,9 +551,10 @@ function indexState(index) {
 
 /**
  * The pull requests — waiting for your review, yours that were reviewed, yours that were not — are a
- * snapshot in storage.local that the menu paints from instantly, and a refresh that runs when the
- * snapshot is older than a minute: on demand when the menu asks, and on an alarm so the toolbar
- * badge is right before the key is ever pressed. Every token contributes, since a fine-grained one
+ * snapshot in storage.local that the menu paints from instantly, and a refresh that runs behind it
+ * on every open, and on an alarm so the toolbar badge is right before the key is ever pressed. The
+ * menu paints the snapshot first and the answer after, so what left between the two is seen to
+ * leave. Every token contributes, since a fine-grained one
  * sees a single owner; the answers are merged by URL.
  */
 let pullsRefresh = null;
@@ -945,6 +1023,8 @@ const HANDLERS = {
   'gitchop:index:state': async () => indexState(await readIndex()),
   /** Instant: the snapshot as it stands, and whether it is worth asking for a fresh one. */
   'gitchop:pulls': () => pullsState(),
+  /** Instant: what is left of GitHub's budgets, as the last answers said. */
+  'gitchop:rate': () => rateState(),
   /** Waits for GitHub. The menu calls it when the instant answer said stale. */
   'gitchop:pulls:refresh': async () => {
     await refreshPulls().catch(() => {});

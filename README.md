@@ -107,9 +107,13 @@ The search keeps focus; the column is there to be looked at. <kbd>→</kbd> or <
 into it, <kbd>↑</kbd> <kbd>↓</kbd> walk the lanes, <kbd>↵</kbd> opens, <kbd>←</kbd> comes back, and
 typing anything drops you straight back into the search with the character you typed. Every lane
 shows everything it holds — the column scrolls when there is more than fits — so nothing sends you off
-to a GitHub list page. It paints from its last snapshot the instant the menu opens and refreshes behind
-it; the toolbar icon carries the number waiting on you, so you know before you press the key.
-Settings has a switch for the column under Panels, and for the badge and whether drafts count under Pull requests.
+to a GitHub list page. It paints from its last snapshot the instant the menu opens and asks GitHub
+again every time, so what you see is the list as it stands: a pull request you have just reviewed,
+or one of yours merged while you were away, is ticked off and swept from its lane before your eyes,
+the lane closing up under it, and one of yours that has gained its verdict crosses to *Feedback on
+your PRs*. A lane that empties says so. The toolbar icon carries the number waiting on you, so you
+know before you press the key. Settings has a switch for the column under Panels, and for the badge
+and whether drafts count under Pull requests.
 
 It needs a token that can read pull requests: a classic token with `repo`, or a fine-grained one with
 **Pull requests: read-only**. A fine-grained token that was only granted Metadata is enough for the
@@ -166,6 +170,22 @@ each of the three whole years before, and the highest count for this year is the
 years with it — a fine-grained token sees fewer repositories than a classic one and may count fewer.
 A switch under Panels in Settings turns it off.
 
+## The gauge
+
+In the bottom right corner of the dark, under a *Rate limits* head, three bars say how much of
+GitHub's budgets is used: *graphql* for the pull requests and the contributions, *rest* for the
+news, the index and the gist, *search* for typing a repository. Each bar is lit the colour of the
+blade and fills from empty at nothing used to full at the limit, with the share used as a figure
+beside it, and above it the count used — *88/5000* — and how long until the allowance turns; past
+nine tenths a bar turns red. The bars fill as the panel rises. GitHub says all of this in the
+headers of every answer, so the gauge costs no request of its own: it is read off the answers as
+they come, and follows them while the menu is up — the pull requests asked for on open take their
+points before your eyes, and so does every search typed. GitHub meters by user rather than by
+token, so two tokens of one account are one set of bars, and a second account's a second set under
+its name; what is asked without a token, which GitHub allows far less of, is listed as *no token*.
+A budget whose allowance has turned since it was last read is back at nothing, since nothing has
+been charged to it since.
+
 ## Backup
 
 Links and settings live in the browser profile, and go with the extension if you remove it. Connect a
@@ -184,7 +204,7 @@ No build step for the code — the files in `src/` are what runs. Packaging only
 `manifest.json` each browser gets, since the two disagree about the background script.
 
 ```sh
-node dev/context.test.mjs && node dev/repos.test.mjs && node dev/effects.test.mjs && node dev/pulls.test.mjs && node dev/news.test.mjs && node dev/contributions.test.mjs && node dev/odometer.test.mjs && node dev/links.test.mjs && node dev/gist.test.mjs && node dev/menu.test.mjs
+node dev/context.test.mjs && node dev/repos.test.mjs && node dev/effects.test.mjs && node dev/pulls.test.mjs && node dev/news.test.mjs && node dev/contributions.test.mjs && node dev/odometer.test.mjs && node dev/links.test.mjs && node dev/gist.test.mjs && node dev/rate.test.mjs && node dev/menu.test.mjs
 node dev/build.mjs all                                 # dist/gitchop-<version>-<browser>.<ext>
 node dev/build.mjs chrome --no-zip                     # unpacked, for chrome://extensions
 open dev/harness.html                                  # the menu, without installing

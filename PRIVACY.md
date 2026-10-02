@@ -44,12 +44,19 @@ search API (`api.github.com`) so the results can be shown. This happens as you t
 300 ms. If you have connected a token the request is authenticated, which raises the rate limit and
 includes private repositories you have access to; without one the request is anonymous.
 
-**Pull requests, if a token is saved.** Every five minutes while the browser is open, and when the menu
-opens with a snapshot older than a minute, gitchop asks GitHub's GraphQL API for two things in one
-request: the open pull requests that request your review, and the open pull requests you authored.
+**Pull requests, if a token is saved.** Every five minutes while the browser is open, and every time
+the menu opens unless the snapshot is a few seconds old, gitchop asks GitHub's GraphQL API for two
+things in one request: the open pull requests that request your review, and the open pull requests
+you authored.
 What comes back — titles, numbers, repositories, authors, review states, timestamps — is kept in
 `storage.local` for the menu and the toolbar badge, and is never sent anywhere. Switching the pull
 requests off in Settings stops the requests; removing the token deletes the snapshot.
+
+**What is left of GitHub's budgets.** Every answer from GitHub carries its rate limit headers — how
+much of the hour's allowance remains for the budget the request was charged to, and when it turns.
+gitchop reads those off the answers it already gets, and keeps the latest per budget and per token
+login in `storage.local` for the gauge in the corner of the menu. No request is made for them, and
+they are never sent anywhere.
 
 **News, only for repositories you subscribe to.** Once a day at the edition hour set in Settings,
 when the browser starts with that day's edition not yet made up, and when the menu opens the same

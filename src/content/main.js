@@ -70,13 +70,28 @@ window.__gitchop = window.__gitchop || {};
     // The background writes the news edition a repository at a time, under this key in local
     // storage. A menu that is up repaints from the background's answer as each lands, so the
     // column fills section by section instead of standing as skeletons until the last one is in.
+    // The pull requests the same way: a snapshot the alarm or Settings wrote while the menu is up
+    // is painted into it, so what left is seen to leave whoever asked.
     api.storage.onChanged.addListener((changes, area) => {
-      if (area !== 'local' || !changes.newsCache || !state.open) return;
+      if (area !== 'local' || !state.open) return;
       const { menu } = state;
       if (!menu) return;
-      ask({ type: 'gitchop:news' }).then((news) => {
-        if (state.menu === menu && news?.ok) menu.updateNews(news);
-      });
+      if (changes.newsCache) {
+        ask({ type: 'gitchop:news' }).then((news) => {
+          if (state.menu === menu && news?.ok) menu.updateNews(news);
+        });
+      }
+      if (changes.pullsCache) {
+        ask({ type: 'gitchop:pulls' }).then((pulls) => {
+          if (state.menu === menu && pulls?.ok) menu.updatePulls(pulls);
+        });
+      }
+      // And what GitHub said was left of its budgets, read off every answer: the gauge follows.
+      if (changes.rateCache) {
+        ask({ type: 'gitchop:rate' }).then((rate) => {
+          if (state.menu === menu && rate?.ok) menu.updateRate(rate);
+        });
+      }
     });
   } catch {
     /* this tab keeps whatever it loaded with */
@@ -100,11 +115,12 @@ window.__gitchop = window.__gitchop || {};
     // The pull requests, the news and the contributions answer from their snapshots, so this is
     // storage reads only; no request holds the menu up, and a background that cannot answer simply
     // means no column, and no number, this time.
-    const [links, pulls, news, contributions, panel] = await Promise.all([
+    const [links, pulls, news, contributions, rate, panel] = await Promise.all([
       readLinks(),
       ask({ type: 'gitchop:pulls' }),
       ask({ type: 'gitchop:news' }),
       ask({ type: 'gitchop:contributions' }),
+      ask({ type: 'gitchop:rate' }),
       ask({ type: 'gitchop:panel' }),
     ]);
     if (state.stage !== stage) return;
@@ -116,6 +132,7 @@ window.__gitchop = window.__gitchop || {};
       pulls: pulls?.ok ? pulls : null,
       news: news?.ok ? news : null,
       contributions: contributions?.ok ? contributions : null,
+      rate: rate?.ok ? rate : null,
       panel: panel?.ok ? panel : null,
       onClose: closeChop,
       onOptions: () => {
@@ -125,7 +142,8 @@ window.__gitchop = window.__gitchop || {};
     });
     state.menu = menu;
 
-    stage.menuLayer.append(menu.element);
+    // The gauge sits in the layer's corner, not in the menu's flow, so the panel's rise leaves it be.
+    stage.menuLayer.append(menu.element, menu.gauge);
     // The gutter between the columns is the stage itself, and clicking it is clicking outside.
     stage.menuLayer.addEventListener('mousedown', (event) => {
       if (event.target === stage.menuLayer || event.target === menu.element) closeChop();
@@ -146,6 +164,7 @@ window.__gitchop = window.__gitchop || {};
     state.menu = null;
     window.removeEventListener('resize', onResize);
 
+    menu?.closed();
     if (menu) stage.close();
     else stage?.destroy();
 

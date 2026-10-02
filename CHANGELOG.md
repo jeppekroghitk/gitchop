@@ -3,6 +3,33 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
+## Unreleased
+
+- The pull requests are asked for on every open, and what left is seen to leave. The column
+  painted its snapshot and asked GitHub again only when that was older than a minute, and the
+  five-minute alarm kept it inside that often enough that the menu opened right after a review
+  still showed the pull request just reviewed. Now every open asks — the key pressed twice within
+  a few seconds shares the one answer — and a pull request no longer yours to deal with is checked
+  off before it goes: its glyph becomes a tick and the row brightens, then its line sweeps out
+  while the lane closes up under it, several leaving one after another. A row still there keeps
+  its place with its age ticking on, and the cursor stays on it; what is new since the snapshot
+  unfolds once the leaving is done, and a lane that has emptied says so where its last row was.
+  The answer waits for the panel to be up, and a beat more, so the list as it was is seen before
+  anything leaves it. A snapshot the alarm writes while the menu is open is painted the same way.
+  Reduced motion keeps it to a fade.
+- A gauge in the corner of the dark says how much of GitHub's budgets is used. The bottom right
+  of the backdrop carries, under a *Rate limits* head, a bar per budget gitchop draws on — graphql
+  for the pull requests and the contributions, rest for the news, the index and the gist, search
+  for typing a repository — lit the colour of the blade and filling from empty at nothing used to
+  full at the limit, with the share used as a figure beside it, and the count used and how long
+  until the allowance turns above. The bars fill as the panel rises; past nine tenths used a bar
+  is red. GitHub says all of it in the headers of every answer, so the gauge is read off the
+  answers as they come and costs no request: it follows them while the menu is up, so the pull
+  requests asked for on open take their points before your eyes, and so does every search typed.
+  GitHub meters by user, so the bars are kept per token login, with a second account's under its
+  name and what is asked without a token under *no token*; an allowance that has turned since it
+  was last read is back at nothing.
+
 ## 2.8.1
 
 - A column standing without the links panel has a height of its own. The pull requests and the

@@ -42,6 +42,26 @@ window.__gitchop = window.__gitchop || {};
   /** The one row in a lane that is not a pull request: the tail for whatever GitHub holds beyond what was fetched. */
   const MORE_ROW = 'more';
 
+  /**
+   * A pull request leaving the column is checked off before it goes: its glyph becomes a tick and
+   * the row brightens, held this long so the tick is seen; then its line sweeps out to the right
+   * while the lane closes up under it. Several leaving at once go one after another, this far
+   * apart, so each is seen to go. What arrives — a lane's quiet line once its last row has left, a
+   * pull request new since the snapshot — unfolds once the leaving is done. A beat is left after
+   * the panel is up before any of it starts, so the list as it was is seen first; and should the
+   * panel never say it is up, the answer is painted anyway after a while.
+   */
+  const LEAVE_HOLD = 220;
+  const LEAVE_SWEEP = 240;
+  const LEAVE_STAGGER = 70;
+  const ARRIVE = 260;
+  const ARRIVE_STAGGER = 50;
+  const LEAVE_BEAT = 180;
+  const REVEAL_AT_MOST = 4000;
+  const EASE_SETTLE = 'cubic-bezier(0.2, 0.7, 0.15, 1)';
+  const EASE_AWAY = 'cubic-bezier(0.5, 0, 0.75, 0.2)';
+  const EASE_CLOSE = 'cubic-bezier(0.4, 0, 0.2, 1)';
+
   /** Skeleton rows standing in for a repository the edition has not reached yet. */
   const NEWS_SLOTS = 2;
   /** About how many lines a fact's popover shows before it scrolls. */
@@ -78,7 +98,92 @@ window.__gitchop = window.__gitchop || {};
   }
   gc.orderRepos = orderRepos;
 
-  gc.createMenu = function createMenu({ ctx, links, pulls, news, contributions, panel: panelSetting, onClose, onOptions, onLinksChanged }) {
+  /**
+   * The pull request column as a list of keyed rows, in the order it is drawn: each lane's heading,
+   * then every pull request it holds, the quiet line when it holds none, and the tail that points
+   * at GitHub past what was fetched — or its skeletons, before the snapshot. A failure before any
+   * lane has loaded is one line in place of them all. The key is what a row *is*, so a refresh can
+   * tell a row that is still there from one that is gone: the same pull request in the same lane
+   * keeps its row however its title or age moved, and one that crossed to another lane is a row
+   * leaving there and one arriving here.
+   */
+  function laneRows(data) {
+    const lanes = data?.lanes ?? [];
+    const loaded = lanes.some((lane) => lane.pulls !== null);
+    if (!loaded && data?.error) return [{ key: 'error', kind: 'error', text: data.error }];
+    const rows = [];
+    for (const lane of lanes) {
+      rows.push({ key: `section:${lane.id}`, kind: 'section', lane });
+      if (lane.pulls === null) {
+        for (let slot = 0; slot < lane.slots; slot += 1) rows.push({ key: `ghost:${lane.id}:${slot}`, kind: 'ghost', lane, slot });
+        continue;
+      }
+      for (const pull of lane.pulls) rows.push({ key: `pull:${lane.id}:${String(pull.url).toLowerCase()}`, kind: 'pull', lane, pull });
+      if (lane.pulls.length === 0) rows.push({ key: `empty:${lane.id}`, kind: 'empty', lane, text: lane.empty });
+      if (lane.total > lane.pulls.length && gc.isSafeUrl(lane.all)) {
+        rows.push({ key: `more:${lane.id}`, kind: 'more', lane, url: lane.all, count: lane.total - lane.pulls.length });
+      }
+    }
+    return rows;
+  }
+  gc.laneRows = laneRows;
+
+  /** Between two paints of the column: the keys that go, and the keys that come, each in drawn order. */
+  function diffRows(before, after) {
+    const was = new Set(before);
+    const now = new Set(after.map((row) => row.key));
+    return {
+      gone: before.filter((key) => !now.has(key)),
+      added: after.filter((row) => !was.has(row.key)).map((row) => row.key),
+    };
+  }
+  gc.diffRows = diffRows;
+
+  /** How long until an allowance turns: seconds under a minute, else minutes, and the hour at most. */
+  function countdown(ms) {
+    const seconds = Math.max(0, Math.ceil(ms / 1000));
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.ceil(seconds / 60);
+    return minutes < 60 ? `${minutes}m` : '1h';
+  }
+  gc.countdown = countdown;
+
+  /**
+   * The gauge's bars from the background's answer, as of now: each budget's share of its allowance
+   * used — as a fraction for the bar, which fills from nothing to the limit, and as whole percent
+   * for the figure, rounded up so that nought means untouched — with the count used, and how long
+   * until the allowance turns. One whose turn has passed since it was read is back at nothing,
+   * nothing having been charged to it since, and has no count-down. The scope is named only when
+   * there is more than one to tell apart. A bar is high past nine tenths used, which is where a
+   * busy afternoon starts to show.
+   */
+  function gaugeRows(state, now = Date.now()) {
+    const scopes = state?.scopes ?? [];
+    const rows = [];
+    for (const scope of scopes) {
+      for (const entry of scope.resources ?? []) {
+        const limit = Math.max(1, Number(entry.limit) || 0);
+        const turning = Number(entry.resetAt) > now;
+        const remaining = turning ? Math.max(0, Math.min(limit, Number(entry.remaining) || 0)) : limit;
+        const used = limit - remaining;
+        const share = used / limit;
+        rows.push({
+          scope: scopes.length > 1 ? scope.label : '',
+          name: entry.label,
+          used,
+          limit,
+          share,
+          percent: Math.ceil(share * 100),
+          resetIn: turning ? countdown(entry.resetAt - now) : '',
+          high: share >= 0.9,
+        });
+      }
+    }
+    return rows;
+  }
+  gc.gaugeRows = gaugeRows;
+
+  gc.createMenu = function createMenu({ ctx, links, pulls, news, contributions, rate, panel: panelSetting, onClose, onOptions, onLinksChanged }) {
     /**
      * The panel — the links and the search — is the menu unless switched off in Settings; then the
      * columns stand on their own, the news alone if that is all that is on. It is never nothing:
@@ -236,7 +341,7 @@ window.__gitchop = window.__gitchop || {};
     }
 
     function popFor(item) {
-      const title = item?.querySelector('.gc-pr-title');
+      const title = item?.isConnected ? item.querySelector('.gc-pr-title') : null;
       if (!title || title.scrollWidth <= title.clientWidth) {
         hidePop();
         return;
@@ -412,11 +517,18 @@ window.__gitchop = window.__gitchop || {};
     let pullsItems = [];
     let pullsIndex = 0;
     let pullsRun = 0;
+    /** The column's rows by key as they stand; a row on its way out has left it, and is only in the list. */
+    const pullsRows = new Map();
+    let pullsLoaded = false;
+    let pullsRevealed = false;
+    let pullsPending = null;
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
     let newsData = news ?? null;
     let newsRun = 0;
     let newsBusy = false;
     let contribData = contributions ?? null;
     let contribRun = 0;
+    let rateData = rate ?? null;
 
     function subscribed(repo) {
       return (newsData?.settings?.repos ?? []).some((seen) => seen.toLowerCase() === String(repo).toLowerCase());
@@ -613,17 +725,19 @@ window.__gitchop = window.__gitchop || {};
     }
 
     /** Row-shaped shimmer standing in for a result that has not arrived yet. */
+    function ghost(slot, tall = false) {
+      const row = node('li');
+      const item = node('div', `gc-item gc-item--ghost${tall ? ' gc-pr' : ''}`);
+      const bar = node('span', 'gc-bar');
+      bar.style.width = GHOST_WIDTHS[slot % GHOST_WIDTHS.length];
+      item.append(node('span', 'gc-icon'), bar);
+      if (!tall) item.append(node('span', 'gc-tail'));
+      row.append(item);
+      return row;
+    }
+
     function skeletons(count, target = list, tall = false) {
-      for (let slot = 0; slot < count; slot += 1) {
-        const row = node('li');
-        const item = node('div', `gc-item gc-item--ghost${tall ? ' gc-pr' : ''}`);
-        const bar = node('span', 'gc-bar');
-        bar.style.width = GHOST_WIDTHS[slot % GHOST_WIDTHS.length];
-        item.append(node('span', 'gc-icon'), bar);
-        if (!tall) item.append(node('span', 'gc-tail'));
-        row.append(item);
-        target.append(row);
-      }
+      for (let slot = 0; slot < count; slot += 1) target.append(ghost(slot, tall));
     }
 
     function addItem(entry) {
@@ -754,9 +868,20 @@ window.__gitchop = window.__gitchop || {};
       };
     }
 
+    /** The tail of a lane: whatever GitHub holds past what was fetched, as one row pointing there. */
+    function moreEntry(row) {
+      return { usable: true, url: row.url, icon: '…', title: `${row.count} more on GitHub`, kind: MORE_ROW };
+    }
+
+    /**
+     * A row that can be stood on: a pull request, or a lane's tail. Built once and filled again on
+     * every refresh — the age ticks on, a title edited on GitHub follows, a verdict that changed is
+     * the new glyph — so a row that is still there is never torn down and rebuilt under the cursor
+     * or the mouse.
+     */
     function pullRow(entry) {
-      const row = node('li');
-      row.setAttribute('role', 'option');
+      const li = node('li');
+      li.setAttribute('role', 'option');
 
       // Same gate as the panel: nothing becomes clickable without passing the scheme check.
       const interactive = entry.usable && gc.isSafeUrl(entry.url);
@@ -764,26 +889,29 @@ window.__gitchop = window.__gitchop || {};
       if (interactive) item.href = entry.url;
       if (entry.tip) item.title = entry.tip;
 
-      const icon = node('span', 'gc-icon', entry.icon);
-      if (entry.verdict) icon.dataset.verdict = entry.verdict;
+      const icon = node('span', 'gc-icon');
+      const title = node('span', 'gc-pr-title');
       // No tail here: the highlight is the cursor, and the age then ends where the divider does.
-      item.append(icon, node('span', 'gc-pr-title', entry.title));
-      if (entry.repo) item.append(node('span', 'gc-pr-repo', entry.repo));
-      if (entry.age) item.append(node('span', 'gc-pr-age', entry.age));
+      item.append(icon, title);
+      const repo = entry.repo ? node('span', 'gc-pr-repo') : null;
+      const age = entry.age ? node('span', 'gc-pr-age') : null;
+      if (repo) item.append(repo);
+      if (age) item.append(age);
+      const record = { li, item, icon, title, repo, age, entry };
+      fillRow(record, entry);
 
-      const index = pullsItems.length;
-      const activate = () => {
-        if (pullsIndex === index) return;
+      item.addEventListener('mousemove', () => {
+        const index = pullsItems.findIndex((it) => it.item === item);
+        if (index < 0 || pullsIndex === index) return;
         pullsIndex = index;
         paint();
-      };
-      item.addEventListener('mousemove', activate);
+      });
       item.addEventListener('mouseenter', () => {
         popHover = item;
         placePop();
       });
       item.addEventListener('mouseleave', () => {
-        popHover = null;
+        if (popHover === item) popHover = null;
         placePop();
       });
       item.addEventListener('click', (event) => {
@@ -792,9 +920,18 @@ window.__gitchop = window.__gitchop || {};
         onClose();
       });
 
-      pullsItems.push({ entry, item });
-      row.append(item);
-      return row;
+      li.append(item);
+      return record;
+    }
+
+    function fillRow(record, entry) {
+      record.entry = entry;
+      record.icon.textContent = entry.icon;
+      if (entry.verdict) record.icon.dataset.verdict = entry.verdict;
+      else delete record.icon.dataset.verdict;
+      record.title.textContent = entry.title;
+      if (record.repo) record.repo.textContent = entry.repo;
+      if (record.age) record.age.textContent = entry.age;
     }
 
     /**
@@ -1023,57 +1160,190 @@ window.__gitchop = window.__gitchop || {};
       return row;
     }
 
+    /** One row of the column, built for its key; what can be stood on carries its entry. */
+    function buildRow(row) {
+      switch (row.kind) {
+        case 'pull':
+          return { kind: row.kind, ...pullRow(pullEntry(row.pull, row.lane)) };
+        case 'more':
+          return { kind: row.kind, ...pullRow(moreEntry(row)) };
+        case 'ghost':
+          return { kind: row.kind, li: ghost(row.slot, true) };
+        case 'empty': {
+          const li = note(row.text);
+          li.classList.add('gc-note--pr');
+          return { kind: row.kind, li };
+        }
+        case 'error':
+          return { kind: row.kind, li: note(row.text) };
+        default:
+          return { kind: row.kind, li: laneSection(row.lane) };
+      }
+    }
+
+    /** A row that is still there, brought up to date without being rebuilt. */
+    function updateRow(record, row) {
+      if (row.kind === 'pull') fillRow(record, pullEntry(row.pull, row.lane));
+      else if (row.kind === 'more') fillRow(record, moreEntry(row));
+      else if (row.kind === 'empty' || row.kind === 'error') record.li.textContent = row.text;
+    }
+
     /**
-     * Before the snapshot, every lane is a few skeleton rows; after, it is exactly as tall as what
-     * it holds — every row, or one quiet line when there is nothing — and the lane below moves up
-     * to meet it. Nothing is folded away: seeing all three groups at once was weighed against
-     * seeing everything in each, and everything won, so the column scrolls when it has to. The
-     * column's own height is the panel's, so nothing about the slab changes as results land. Only
-     * past what was fetched does a row point at GitHub.
+     * A row on its way out. A pull request is checked off first — the glyph becomes a tick and the
+     * row brightens, as a line on a list is ticked before it is struck — then its line sweeps out
+     * to the right while the row closes to nothing, and the lane under it moves up to meet what is
+     * left. A lane's tail or quiet line simply closes. Reduced motion is a fade. The row left the
+     * map as it set off; it leaves the list the moment it is out.
+     */
+    function leave(record, delay) {
+      const { li, item, icon } = record;
+      li.dataset.leaving = 'true';
+      if (item) item.dataset.active = 'false';
+      if (popHover === item) popHover = null;
+      const gone = () => li.remove();
+      if (reduced) {
+        li.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, delay, easing: 'ease-out', fill: 'forwards' }).finished.then(gone, gone);
+        return;
+      }
+      const checked = record.kind === 'pull';
+      const hold = checked ? LEAVE_HOLD : 0;
+      if (checked) {
+        setTimeout(() => {
+          icon.textContent = '✓';
+          icon.dataset.done = 'true';
+          icon.animate(
+            [
+              { transform: 'scale(0.4)', opacity: 0 },
+              { transform: 'scale(1.25)', opacity: 1, offset: 0.55 },
+              { transform: 'none', opacity: 1 },
+            ],
+            { duration: 220, easing: EASE_SETTLE },
+          );
+        }, delay);
+        item.animate([{ background: 'rgba(255, 255, 255, 0.1)' }, { background: 'transparent' }], {
+          duration: hold + LEAVE_SWEEP,
+          delay,
+          easing: 'ease-out',
+          fill: 'backwards',
+        });
+      }
+      // The line and the row end together: a row that had faded but still stood would leave a
+      // hole where it was until it had closed, and a lane losing many at once a dark gap.
+      li.style.overflow = 'hidden';
+      if (item) {
+        item.animate([{ transform: 'none', opacity: 1 }, { transform: 'translateX(18px)', opacity: 0 }], {
+          duration: LEAVE_SWEEP,
+          delay: delay + hold,
+          easing: EASE_AWAY,
+          fill: 'forwards',
+        });
+      }
+      li.animate([openBox(li), CLOSED_BOX], {
+        duration: LEAVE_SWEEP - 60,
+        delay: delay + hold + 60,
+        easing: EASE_CLOSE,
+        fill: 'forwards',
+      }).finished.then(gone, gone);
+    }
+
+    /**
+     * A row's box as it stands, and closed. A pull request's row is a bare wrapper, but a lane's
+     * quiet line is its own row with padding and a floor of its own, which a height of nothing
+     * leaves standing — so the fold takes those to nothing too.
+     */
+    const CLOSED_BOX = { height: '0px', minHeight: '0px', paddingTop: '0px', paddingBottom: '0px' };
+    function openBox(li) {
+      const style = getComputedStyle(li);
+      return { height: `${li.offsetHeight}px`, minHeight: '0px', paddingTop: style.paddingTop, paddingBottom: style.paddingBottom };
+    }
+
+    /** A row that is new: it unfolds to its height, and its line comes in a touch behind the fold. */
+    function arrive(record, delay) {
+      const { li, item } = record;
+      if (reduced) {
+        li.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, delay, easing: 'ease-out', fill: 'backwards' });
+        return;
+      }
+      li.style.overflow = 'hidden';
+      const settle = () => {
+        li.style.overflow = '';
+      };
+      li.animate([CLOSED_BOX, openBox(li)], { duration: ARRIVE, delay, easing: EASE_SETTLE, fill: 'backwards' }).finished.then(settle, settle);
+      (item ?? li).animate([{ opacity: 0, transform: 'translateX(-8px)' }, { opacity: 1, transform: 'none' }], {
+        duration: ARRIVE,
+        delay: delay + 80,
+        easing: EASE_SETTLE,
+        fill: 'backwards',
+      });
+    }
+
+    /**
+     * Paints the column from `pullsData`, keeping every row that is still there. Before the
+     * snapshot, every lane is a few skeleton rows; after, it is exactly as tall as what it holds —
+     * every row, or one quiet line when there is nothing — and the lane below moves up to meet it.
+     * Nothing is folded away: seeing all three groups at once was weighed against seeing everything
+     * in each, and everything won, so the column scrolls when it has to. The column's own height is
+     * the panel's, so nothing about the slab changes as results land. Only past what was fetched
+     * does a row point at GitHub.
+     *
+     * A refresh over a snapshot already up changes only what changed: a row still there is filled
+     * again in place, one that is gone leaves, one that is new arrives once the leaving is done.
+     * The first snapshot over the skeletons is simply placed — there was nothing to see go — as is
+     * anything while the column is out of the layout. Rows on their way out stay where they were
+     * until they are gone, so the walk that puts what remains in order steps past them. The cursor
+     * stays on the row it was on if that row is still there, and comes back to the panel if the
+     * column has emptied under it.
      */
     function renderPulls() {
       if (!pullsEl) return;
-      pullsList.textContent = '';
-      pullsItems = [];
-      popHover = null;
-      hidePop();
-
       const data = pullsData ?? {};
-      const lanes = data.lanes ?? [];
-      const loaded = lanes.some((lane) => lane.pulls !== null);
+      const rows = laneRows(data);
+      const loaded = (data.lanes ?? []).some((lane) => lane.pulls !== null);
+      const animate = loaded && pullsLoaded && pullsVisible();
+      const activeKey = pullsItems[pullsIndex]?.key ?? null;
 
-      if (!loaded && data.error) {
-        pullsList.append(note(data.error));
-        paint();
-        return;
+      const { gone } = diffRows([...pullsRows.keys()], rows);
+      gone.forEach((key, index) => {
+        const record = pullsRows.get(key);
+        pullsRows.delete(key);
+        if (animate) leave(record, index * LEAVE_STAGGER);
+        else record.li.remove();
+      });
+
+      pullsItems = [];
+      const arriving = [];
+      let cursor = pullsList.firstChild;
+      for (const row of rows) {
+        let record = pullsRows.get(row.key);
+        if (record) {
+          updateRow(record, row);
+        } else {
+          record = buildRow(row);
+          pullsRows.set(row.key, record);
+          arriving.push(record);
+        }
+        while (cursor && cursor !== record.li && cursor.dataset?.leaving === 'true') cursor = cursor.nextSibling;
+        if (cursor === record.li) cursor = cursor.nextSibling;
+        else pullsList.insertBefore(record.li, cursor);
+        if (row.kind === 'pull' || row.kind === 'more') pullsItems.push({ key: row.key, entry: record.entry, item: record.item });
+      }
+      pullsLoaded = loaded;
+
+      if (animate) {
+        const after = gone.length > 0 ? LEAVE_HOLD + LEAVE_SWEEP + (gone.length - 1) * LEAVE_STAGGER : 0;
+        arriving.forEach((record, index) => arrive(record, after + index * ARRIVE_STAGGER));
       }
 
-      for (const lane of lanes) {
-        pullsList.append(laneSection(lane));
-        if (lane.pulls === null) {
-          skeletons(lane.slots, pullsList, true);
-          continue;
-        }
-        for (const pull of lane.pulls) pullsList.append(pullRow(pullEntry(pull, lane)));
-        if (lane.pulls.length === 0) {
-          const empty = note(lane.empty);
-          empty.classList.add('gc-note--pr');
-          pullsList.append(empty);
-        }
-        if (lane.total > lane.pulls.length && gc.isSafeUrl(lane.all)) {
-          pullsList.append(
-            pullRow({ usable: true, url: lane.all, icon: '…', title: `${lane.total - lane.pulls.length} more on GitHub`, kind: MORE_ROW }),
-          );
-        }
-      }
-
-      pullsIndex = Math.max(0, Math.min(pullsIndex, pullsItems.length - 1));
+      const kept = activeKey ? pullsItems.findIndex((it) => it.key === activeKey) : -1;
+      pullsIndex = kept >= 0 ? kept : Math.max(0, Math.min(pullsIndex, pullsItems.length - 1));
+      if (region === 'pulls' && pullsItems.length === 0) toPanel();
       paint();
     }
 
     /**
-     * The snapshot painted instantly; if the background said it was stale, ask for a fresh one and
-     * repaint when it lands. A later navigation owns the result, exactly as with the search.
+     * The snapshot painted instantly; if the background said it was worth asking, ask for a fresh
+     * one and paint the answer once the panel is up. A later refresh owns the result, exactly as
+     * with the search.
      */
     async function refreshPulls() {
       if (!pullsEl || !pullsData?.stale) return;
@@ -1086,8 +1356,32 @@ window.__gitchop = window.__gitchop || {};
         /* keep what is already on screen */
       }
       if (run !== pullsRun) return;
-      pullsData = next ?? { ...pullsData, error: pullsData.error ?? 'GitHub did not answer.' };
+      applyPulls(next ?? { ...pullsData, error: pullsData.error ?? 'GitHub did not answer.' });
+    }
+
+    /**
+     * A fresh answer is painted once the panel is up, and a beat after, so the list as it was is
+     * seen before anything leaves it — the whole point of asking again is to see what has gone.
+     * Until then the latest answer waits, and whatever lands while the panel is still rising is
+     * the one painted when it is. Should the panel never say it is up, the answer is painted anyway
+     * after a while: a column standing on an old snapshot is worse than a departure unseen.
+     */
+    function applyPulls(next) {
+      if (!next) return;
+      if (!pullsRevealed) {
+        pullsPending = next;
+        return;
+      }
+      pullsData = next;
       renderPulls();
+    }
+
+    function revealPulls() {
+      if (pullsRevealed) return;
+      pullsRevealed = true;
+      const next = pullsPending;
+      pullsPending = null;
+      if (next) setTimeout(() => applyPulls(next), LEAVE_BEAT);
     }
 
     function toPulls() {
@@ -1396,13 +1690,84 @@ window.__gitchop = window.__gitchop || {};
       paint();
     });
 
+    /**
+     * How much of GitHub's budgets is used, in the corner of the dark: a bar per budget, lit the
+     * colour of the blade, filling from nothing to the limit, with the share used as a figure
+     * beside it, and the count used and how long until the allowance turns above. It is for
+     * looking at — it takes no pointer, so a click on it is a click on the dark. The bars stand
+     * empty until the panel is up and then fill to where they are, and from then on they follow
+     * the background's table as the menu's own requests land — the pull requests asked for on
+     * open, each repository search typed — sliding rather than jumping, which is why a bar that is
+     * still there is kept and moved, not drawn again. The count-down ticks once a second while the
+     * menu is up, and stops when it is gone.
+     */
+    const gauge = node('div', 'gc-gauge');
+    gauge.setAttribute('aria-label', 'GitHub rate limits');
+    gauge.dataset.shown = 'false';
+    let gaugeLit = false;
+    let gaugeKeys = '';
+    const gaugeBars = new Map();
+
+    function renderGauge() {
+      const rows = gaugeRows(rateData, Date.now());
+      gauge.hidden = rows.length === 0;
+      const keys = rows.map((row) => `${row.scope}\n${row.name}`);
+      if (keys.join('\0') !== gaugeKeys) {
+        gaugeKeys = keys.join('\0');
+        gauge.textContent = '';
+        gaugeBars.clear();
+        // A head like the lanes' own, so the corner says what it is before it says how much.
+        const head = node('div', 'gc-gauge-head');
+        head.append(node('span', null, 'Rate limits'), node('span', 'gc-rule'));
+        gauge.append(head);
+        let who = null;
+        rows.forEach((row, index) => {
+          if (row.scope && row.scope !== who) {
+            who = row.scope;
+            gauge.append(node('div', 'gc-gauge-who', row.scope));
+          }
+          const line = node('div', 'gc-gauge-row');
+          const top = node('span', 'gc-gauge-line');
+          const meta = node('span', 'gc-gauge-meta');
+          top.append(node('span', 'gc-gauge-name', row.name), meta);
+          const bar = node('span', 'gc-gauge-bar');
+          const fill = node('span', 'gc-gauge-fill');
+          fill.style.width = '0%';
+          bar.append(fill);
+          const percent = node('span', 'gc-gauge-percent');
+          line.append(top, bar, percent);
+          gauge.append(line);
+          gaugeBars.set(keys[index], { line, meta, fill, percent });
+        });
+      }
+      rows.forEach((row, index) => {
+        const parts = gaugeBars.get(keys[index]);
+        parts.line.dataset.high = String(row.high);
+        parts.meta.textContent = `${row.used}/${row.limit}${row.resetIn ? ` · ${row.resetIn}` : ''}`;
+        parts.percent.textContent = `${row.percent}%`;
+        parts.fill.style.width = gaugeLit ? `${Math.round(row.share * 1000) / 10}%` : '0%';
+      });
+    }
+
+    let gaugeSeen = false;
+    const gaugeTimer = setInterval(() => {
+      if (gauge.isConnected) gaugeSeen = true;
+      else if (gaugeSeen) {
+        clearInterval(gaugeTimer);
+        return;
+      }
+      renderGauge();
+    }, 1000);
+
     render();
     renderPulls();
     renderNews();
     renderCount();
+    renderGauge();
     refreshPulls();
     refreshNews();
     refreshCount();
+    setTimeout(revealPulls, REVEAL_AT_MOST);
 
     return {
       element: stage,
@@ -1417,9 +1782,36 @@ window.__gitchop = window.__gitchop || {};
         else stage.focus({ preventScroll: true });
         paint();
       },
-      /** The panel has risen: the reels may roll up to the number now, where the roll can be seen. */
+      /**
+       * The panel has risen: the reels may roll up to the number now, where the roll can be seen,
+       * and a fresh answer about the pull requests may be painted, where what leaves is seen to go.
+       */
       revealed() {
         count?.odometer.reveal();
+        revealPulls();
+        gauge.dataset.shown = 'true';
+        gaugeLit = true;
+        renderGauge();
+      },
+      /** The budgets' corner of the dark, for the layer to place beside the menu: it is not in the menu's own flow. */
+      gauge,
+      /** The background read another answer from GitHub while the menu is up: the gauge follows. */
+      updateRate(next) {
+        if (!next) return;
+        rateData = next;
+        renderGauge();
+      },
+      /** The menu is going: nothing of it may keep ticking. */
+      closed() {
+        clearInterval(gaugeTimer);
+      },
+      /**
+       * The snapshot changed on file while the menu is up — the alarm landed, or Settings asked —
+       * so the column is painted from it, what left leaving as it would after the menu's own ask.
+       */
+      updatePulls(next) {
+        if (!pullsEl || !next) return;
+        applyPulls(next);
       },
       /**
        * The edition changed on file while the menu is up — a repository landing in a refresh that
