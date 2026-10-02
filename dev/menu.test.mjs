@@ -1,7 +1,7 @@
 import assert from 'node:assert';
-// The menu's pure parts, exported beside the menu itself; nothing in it touches the page until a
-// menu is made, so it imports under plain node.
-import { countdown, diffRows, gaugeRows, laneRows, orderRepos } from '../src/content/menu.js';
+// The menu's pure parts, in a module of their own that touches nothing of the page, so it imports
+// under plain node.
+import { countdown, diffRows, gaugeRows, laneRows, orderRepos, standsPanel } from '../src/content/menu/rows.js';
 
 const repo = (fullName, owned = true) => ({ fullName, url: `https://github.com/${fullName}`, description: '', private: false, archived: false, owned });
 const names = (list) => list.map((entry) => entry.fullName);
@@ -107,5 +107,13 @@ assert.deepEqual(gaugeRows({ scopes: [] }, t), []);
 assert.deepEqual(gaugeRows({ scopes: [{ id: 'x', label: 'x', resources: [budget('core', 'rest', 70, 0, t + 1)] }] }, t)[0].limit, 1, 'an allowance of nothing is never divided by');
 assert.equal(gaugeRows({ scopes: [{ id: 'x', label: 'x', resources: [budget('core', 'rest', 70, 60, t + 1)] }] }, t)[0].used, 0, 'more left than the allowance is nothing used');
 assert.equal(gaugeRows({ scopes: [{ id: 'x', label: 'x', resources: [budget('core', 'rest', -4, 60, t + 1)] }] }, t)[0].used, 60, 'less than nothing left is all of it used');
+
+// The panel stands unless switched off, and even then only steps aside for a column that stands.
+assert.equal(standsPanel(null, null, null), true, 'no answer about the panel is the panel');
+assert.equal(standsPanel({ show: true }, { show: true }, null), true);
+assert.equal(standsPanel({ show: false }, { show: true }, null), false, 'switched off beside the pull requests, it goes');
+assert.equal(standsPanel({ show: false }, null, { show: true, repos: ['a/b'] }), false, 'beside news with something subscribed, it goes');
+assert.equal(standsPanel({ show: false }, null, { show: true, repos: [] }), true, 'news with nothing subscribed is no column, so the panel stays');
+assert.equal(standsPanel({ show: false }, { show: false }, null), true, 'with no column at all it is never nothing');
 
 console.log('menu ok');
