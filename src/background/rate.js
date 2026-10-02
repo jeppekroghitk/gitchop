@@ -56,7 +56,8 @@ function rateScopeOf(init) {
  * @param {Response} response
  */
 async function noteAnswer(input, init, response) {
-  let host = '';
+  /** @type {string} */
+  let host;
   try {
     host = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input?.url).host;
   } catch {

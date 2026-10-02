@@ -16,29 +16,22 @@ jobs:
           node-version: '22'
           cache: npm
 
-      # esbuild, for the bundles, and TypeScript, for the type check; package-lock.json pins them.
+      # esbuild, for the bundles, TypeScript, for the type check, and ESLint; package-lock.json pins them.
+      # ESLint 10 wants node 22.13 or later, which the 22 line above resolves to.
       - name: Install the build's tools
         run: npm ci
+
+      - name: Lint
+        run: npm run lint
 
       # Nothing is compiled: tsc reads the JSDoc in the sources, so this is where a message the
       # background has no handler for, or one missing a field its handler reads, is caught.
       - name: Type check
         run: npm run typecheck
 
+      # Every dev/*.test.mjs, under node's test runner; a new test file is picked up without a line here.
       - name: Tests
-        run: |
-          node dev/context.test.mjs
-          node dev/repos.test.mjs
-          node dev/effects.test.mjs
-          node dev/pulls.test.mjs
-          node dev/news.test.mjs
-          node dev/contributions.test.mjs
-          node dev/odometer.test.mjs
-          node dev/links.test.mjs
-          node dev/gist.test.mjs
-          node dev/rate.test.mjs
-          node dev/menu.test.mjs
-          node dev/background.test.mjs
+        run: npm test
 
       # The background reaches the browser unbundled, so this is where a mistyped path or a broken
       # import is caught — the build refuses to package a manifest it cannot resolve, or a bundle

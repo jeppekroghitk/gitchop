@@ -40,7 +40,8 @@ function render(ok, note) {
   grant.type = 'button';
   grant.addEventListener('click', async () => {
     grant.textContent = 'waiting…';
-    let allowed = false;
+    /** @type {boolean} */
+    let allowed;
     try {
       allowed = await api.permissions.request(NEEDED);
     } catch (error) {

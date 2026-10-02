@@ -1,97 +1,104 @@
 import assert from 'node:assert';
+import { test } from 'node:test';
 import { matchIndex, ownersFromLinks, privateOwnersOf } from '../src/lib/repos.js';
 import { tokenLabel } from '../src/lib/gist.js';
 
-assert.deepEqual(
-  ownersFromLinks([
-    { url: 'https://github.com/itk-dev' },
-    { url: 'https://github.com/os2display/display-admin-client' },
-    { url: 'https://github.com/notifications' },
-    { url: 'https://github.com/{repoFull}/actions' },
-    { url: 'https://github.com/issues/assigned' },
-    { url: 'https://github.com/ITK-dev' },
-    { url: 'not a url' },
-    {},
-  ]),
-  ['itk-dev', 'os2display'],
-  'organisations and repo owners count; GitHub features, placeholders and duplicates do not',
-);
+test('the owners to favour are read off the links', () => {
+  assert.deepEqual(
+    ownersFromLinks([
+      { url: 'https://github.com/itk-dev' },
+      { url: 'https://github.com/os2display/display-admin-client' },
+      { url: 'https://github.com/notifications' },
+      { url: 'https://github.com/{repoFull}/actions' },
+      { url: 'https://github.com/issues/assigned' },
+      { url: 'https://github.com/ITK-dev' },
+      { url: 'not a url' },
+      {},
+    ]),
+    ['itk-dev', 'os2display'],
+    'organisations and repo owners count; GitHub features, placeholders and duplicates do not',
+  );
 
-assert.deepEqual(ownersFromLinks([]), []);
-assert.deepEqual(ownersFromLinks(undefined), []);
+  assert.deepEqual(ownersFromLinks([]), []);
+  assert.deepEqual(ownersFromLinks(undefined), []);
 
-assert.deepEqual(
-  ownersFromLinks([{ url: 'https://www.github.com/one/x' }, { url: 'http://github.com/two' }]),
-  ['one', 'two'],
-  'www and http forms still resolve',
-);
+  assert.deepEqual(
+    ownersFromLinks([{ url: 'https://www.github.com/one/x' }, { url: 'http://github.com/two' }]),
+    ['one', 'two'],
+    'www and http forms still resolve',
+  );
 
-assert.equal(
-  ownersFromLinks(Array.from({ length: 9 }, (unused, index) => ({ url: `https://github.com/org${index}` }))).length,
-  5,
-  'the qualifier list is capped',
-);
+  assert.equal(
+    ownersFromLinks(Array.from({ length: 9 }, (unused, index) => ({ url: `https://github.com/org${index}` }))).length,
+    5,
+    'the qualifier list is capped',
+  );
 
-assert.deepEqual(
-  ownersFromLinks([{ url: 'https://gitlab.com/someone/thing' }]),
-  [],
-  'only github.com owners are favoured',
-);
+  assert.deepEqual(
+    ownersFromLinks([{ url: 'https://gitlab.com/someone/thing' }]),
+    [],
+    'only github.com owners are favoured',
+  );
+});
 
-const index = [
-  { fullName: 'itk-dev/economics', private: true },
-  { fullName: 'itk-dev/economics-legacy', private: true },
-  { fullName: 'someone/my-economics-fork', private: false },
-  { fullName: 'itk-dev/eco', private: true },
-  { fullName: 'other/unrelated', private: false },
-];
-
-assert.deepEqual(
-  matchIndex(index, 'eco').map((repo) => repo.fullName),
-  ['itk-dev/eco', 'itk-dev/economics', 'itk-dev/economics-legacy', 'someone/my-economics-fork'],
-  'exact name first, then prefixes shortest-first, then substrings',
-);
-
-assert.deepEqual(
-  matchIndex(index, 'itk-dev/economics').map((repo) => repo.fullName),
-  ['itk-dev/economics', 'itk-dev/economics-legacy'],
-  'a full owner/name match wins outright',
-);
-
-assert.deepEqual(matchIndex(index, 'e', 5), [], 'one character is not enough to match on');
-assert.deepEqual(matchIndex(index, 'nothinghere'), []);
-assert.deepEqual(matchIndex(undefined, 'eco'), [], 'no index is not an error');
-assert.equal(matchIndex(index, 'eco', 2).length, 2, 'the limit is respected');
-
-assert.deepEqual(
-  privateOwnersOf([
+test('the index is matched exact name first, then prefixes shortest-first, then substrings', () => {
+  const index = [
     { fullName: 'itk-dev/economics', private: true },
-    { fullName: 'ITK-dev/eco', private: true },
-    { fullName: 'os2display/client', private: true },
-    { fullName: 'os2forms/public-thing', private: false },
-    { fullName: 'bare', private: true },
-    {},
-  ]),
-  ['itk-dev', 'os2display'],
-  'owners come first seen first, once each whatever the casing; public repositories and a name without a slash say nothing',
-);
-assert.deepEqual(
-  privateOwnersOf([{ fullName: 'itk-dev/a', private: false }, { fullName: 'os2display/b', private: false }]),
-  [],
-  'a token awaiting approval lists only public repositories, which names no owner',
-);
-assert.deepEqual(privateOwnersOf([]), []);
-assert.deepEqual(privateOwnersOf(undefined), []);
+    { fullName: 'itk-dev/economics-legacy', private: true },
+    { fullName: 'someone/my-economics-fork', private: false },
+    { fullName: 'itk-dev/eco', private: true },
+    { fullName: 'other/unrelated', private: false },
+  ];
 
-assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: ['itk-dev'] }), '@itk-dev', 'a fine-grained token is named for the owner it reaches');
-assert.equal(tokenLabel({ login: 'me', kind: 'classic', owners: ['me', 'itk-dev'] }), '@me', 'a classic token is the account’s whatever it reaches');
-assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: [] }), '@me', 'reaching nothing falls back to who made it');
-assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: null }), '@me', 'so does not knowing');
-assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: [], target: 'itk-dev' }), '@itk-dev', 'reaching nothing yet, it is named for the owner it was made for');
-assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: null, target: 'itk-dev' }), '@itk-dev');
-assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: ['os2display'], target: 'itk-dev' }), '@os2display', 'what it reaches beats what it was made for');
-assert.equal(tokenLabel({ login: 'me', kind: 'classic', owners: [], target: 'itk-dev' }), '@me', 'a classic token is the account’s, whatever the recipe said');
-assert.equal(tokenLabel({ login: null, kind: 'fine-grained', owners: null }), 'fine-grained');
-assert.equal(tokenLabel({ login: null, kind: null }), 'token');
+  assert.deepEqual(
+    matchIndex(index, 'eco').map((repo) => repo.fullName),
+    ['itk-dev/eco', 'itk-dev/economics', 'itk-dev/economics-legacy', 'someone/my-economics-fork'],
+    'exact name first, then prefixes shortest-first, then substrings',
+  );
 
-console.log('repos.js: all assertions passed');
+  assert.deepEqual(
+    matchIndex(index, 'itk-dev/economics').map((repo) => repo.fullName),
+    ['itk-dev/economics', 'itk-dev/economics-legacy'],
+    'a full owner/name match wins outright',
+  );
+
+  assert.deepEqual(matchIndex(index, 'e', 5), [], 'one character is not enough to match on');
+  assert.deepEqual(matchIndex(index, 'nothinghere'), []);
+  assert.deepEqual(matchIndex(undefined, 'eco'), [], 'no index is not an error');
+  assert.equal(matchIndex(index, 'eco', 2).length, 2, 'the limit is respected');
+});
+
+test('the owners of private repositories come first seen first, once each', () => {
+  assert.deepEqual(
+    privateOwnersOf([
+      { fullName: 'itk-dev/economics', private: true },
+      { fullName: 'ITK-dev/eco', private: true },
+      { fullName: 'os2display/client', private: true },
+      { fullName: 'os2forms/public-thing', private: false },
+      { fullName: 'bare', private: true },
+      {},
+    ]),
+    ['itk-dev', 'os2display'],
+    'owners come first seen first, once each whatever the casing; public repositories and a name without a slash say nothing',
+  );
+  assert.deepEqual(
+    privateOwnersOf([{ fullName: 'itk-dev/a', private: false }, { fullName: 'os2display/b', private: false }]),
+    [],
+    'a token awaiting approval lists only public repositories, which names no owner',
+  );
+  assert.deepEqual(privateOwnersOf([]), []);
+  assert.deepEqual(privateOwnersOf(undefined), []);
+});
+
+test('a token is named for the owner it reaches, or the account it belongs to', () => {
+  assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: ['itk-dev'] }), '@itk-dev', 'a fine-grained token is named for the owner it reaches');
+  assert.equal(tokenLabel({ login: 'me', kind: 'classic', owners: ['me', 'itk-dev'] }), '@me', 'a classic token is the account’s whatever it reaches');
+  assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: [] }), '@me', 'reaching nothing falls back to who made it');
+  assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: null }), '@me', 'so does not knowing');
+  assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: [], target: 'itk-dev' }), '@itk-dev', 'reaching nothing yet, it is named for the owner it was made for');
+  assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: null, target: 'itk-dev' }), '@itk-dev');
+  assert.equal(tokenLabel({ login: 'me', kind: 'fine-grained', owners: ['os2display'], target: 'itk-dev' }), '@os2display', 'what it reaches beats what it was made for');
+  assert.equal(tokenLabel({ login: 'me', kind: 'classic', owners: [], target: 'itk-dev' }), '@me', 'a classic token is the account’s, whatever the recipe said');
+  assert.equal(tokenLabel({ login: null, kind: 'fine-grained', owners: null }), 'fine-grained');
+  assert.equal(tokenLabel({ login: null, kind: null }), 'token');
+});

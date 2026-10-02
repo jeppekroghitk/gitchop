@@ -3,9 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test dev/",
-    "build": "node dev/build.mjs all",
-    "typecheck": "tsc -p ."
+    "test": "node --test dev/*.test.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc -p .",
+    "build": "node dev/build.mjs all"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

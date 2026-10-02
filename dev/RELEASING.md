@@ -11,8 +11,8 @@
    git tag v2.1.0 && git push origin main v2.1.0
    ```
 
-The `release` workflow runs the tests, refuses the tag if it disagrees with `manifest.json`, builds
-both packages and attaches them to a GitHub release:
+The `release` workflow lints, type-checks and runs the tests the way CI does, refuses the tag if it
+disagrees with `manifest.json`, builds both packages and attaches them to a GitHub release:
 
 | File | Goes to |
 | --- | --- |
@@ -25,9 +25,15 @@ neither rewards an extension that appears unattended.
 To build the same files locally:
 
 ```sh
-npm ci                               # esbuild, once, at the version package-lock.json pins
+npm ci                               # the build's tools, once, at the versions package-lock.json pins
 node dev/build.mjs all               # dist/gitchop-<version>-<browser>.<ext>
 node dev/build.mjs chrome --no-zip   # unpacked, for chrome://extensions
+```
+
+and to check the tree the way the workflow will before tagging it:
+
+```sh
+npm run lint && npm run typecheck && npm test
 ```
 
 ## What differs per browser
@@ -65,7 +71,8 @@ git archive --format=zip -o gitchop-<version>-source.zip v<version>
 The archive carries `package.json` and `package-lock.json`, so the reviewer needs nothing else. The
 bundles are not minified and carry no source maps, so they read as the sources joined up; the only
 change esbuild makes is to number a name two modules both declare (`node2`). To reproduce them byte
-for byte, with Node 22 or later:
+for byte, with Node 22 or later (before 22.13, `npm ci` warns that the ESLint it installs beside
+esbuild wants a newer Node; the build never runs ESLint, so the warning changes nothing):
 
 ```sh
 npm ci && node dev/build.mjs firefox

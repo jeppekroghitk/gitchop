@@ -657,7 +657,7 @@ function explain(status, anonymous) {
 async function get(path, token) {
   const response = await fetch(`${API}${path}`, { headers: headers(token) });
   /** @type {any} */
-  let body = null;
+  let body;
   try {
     body = await response.json();
   } catch {

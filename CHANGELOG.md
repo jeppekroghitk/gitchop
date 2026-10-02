@@ -3,6 +3,36 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
+## Unreleased
+
+Nothing changes in the menu, the chop or Settings; this is the inside rearranged, so that the next
+change is easier to make and harder to get wrong.
+
+- The content script is written as ES modules and bundled. Content scripts named in the manifest
+  load as classic scripts in both browsers, so the content code could not import anything and leaned
+  on load order and globals shared between files. Now each module says what it depends on, and
+  [esbuild](https://esbuild.github.io) joins them into the one `content.js` each package carries —
+  not minified and with no source maps, so a reviewer reads the sources joined up. The settings
+  page's preview stage is bundled the same way. The repository root is no longer an extension on its
+  own; build and load `dist/<browser>`.
+- The background is a module per feature. Tokens, the gist, the pull requests, the news, the
+  contributions, the rate gauge and the message router had grown into one file sharing one scope;
+  each now stands on its own under `src/background/`, with `index.js` adding every listener on the
+  first pass, as an event page or a service worker woken by an event needs.
+- The menu is a module per part. The shell, the rows, search, the keyboard, the motion, the news
+  and pull request columns and the gauge each live under `src/content/menu/`, and `menu.js` only
+  wires them together. The rows' arithmetic sits in a module that touches nothing of the page, so
+  the tests import it under plain node.
+- The JavaScript is type-checked. It stays plain JavaScript that the browsers and esbuild run as it
+  is; TypeScript reads only its JSDoc, which is where a message the background has no handler for,
+  or one missing a field its handler reads, is now caught — before, either was a silent no-op.
+- The tests run under node's own test runner, a named test per behaviour, and `npm test` finds
+  every one, so CI and the release no longer keep a list of files that had already fallen out of
+  step. ESLint's recommended rules run over everything, each directory held to the globals of where
+  it runs — the background and `src/lib/` to a service worker's, so a reach for the page from there
+  is caught before Chrome finds it. CI and the release lint, type-check, test and build, in that
+  order.
+
 ## 2.9.0
 
 - The pull requests are asked for on every open, and what left is seen to leave. The column

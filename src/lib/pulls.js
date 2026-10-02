@@ -250,7 +250,7 @@ export async function fetchLanes(token, settings) {
   });
 
   /** @type {any} */
-  let payload = null;
+  let payload;
   try {
     payload = await response.json();
   } catch {

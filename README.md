@@ -206,7 +206,7 @@ page previews the chop with, so the repository root is not an extension you can 
 build and load `dist/<browser>`:
 
 ```sh
-npm ci                                                 # esbuild and TypeScript, pinned by package-lock.json
+npm ci                                                 # esbuild, TypeScript and ESLint, pinned by package-lock.json
 node dev/build.mjs firefox --no-zip                    # dist/firefox: about:debugging → This Firefox → Load Temporary Add-on → its manifest.json
 node dev/build.mjs chrome --no-zip                     # dist/chrome: chrome://extensions → Load unpacked
 node dev/build.mjs firefox --watch                     # the same, rebuilt on every change; reload the extension to pick it up
@@ -218,7 +218,8 @@ where two modules declare the same name esbuild numbers one of them (`node2`). P
 disagree about the background script, which reaches the browser unbundled.
 
 ```sh
-node dev/context.test.mjs && node dev/repos.test.mjs && node dev/effects.test.mjs && node dev/pulls.test.mjs && node dev/news.test.mjs && node dev/contributions.test.mjs && node dev/odometer.test.mjs && node dev/links.test.mjs && node dev/gist.test.mjs && node dev/rate.test.mjs && node dev/menu.test.mjs && node dev/background.test.mjs
+npm test                                               # node --test over every dev/*.test.mjs; one file alone is node --test dev/<name>.test.mjs
+npm run lint                                           # ESLint: the recommended rules, with the globals of wherever each directory runs
 npm run typecheck                                      # tsc -p .: the JavaScript checked from its JSDoc, nothing emitted; types/ declares the extension APIs
 node dev/serve.mjs --open                              # the harness: the menu without installing, and Settings opens the real settings page
 ```
@@ -228,8 +229,8 @@ on every request, so a reload runs whatever was just saved. Opened from `file://
 headless screenshots — it runs `dev/content.js` instead, a git-ignored copy that every build and
 `node dev/bundle.mjs` write; the settings page needs the server either way.
 
-With [Task](https://taskfile.dev) installed, the same are `task test`, `task typecheck`, `task build`,
-`task watch` and `task harness`; `task` alone lists them.
+With [Task](https://taskfile.dev) installed, the same are `task test`, `task lint`, `task typecheck`,
+`task build`, `task watch` and `task harness`; `task` alone lists them.
 
 The build refuses to package a manifest whose files do not resolve, imports included, or a script
 that would not parse the way the browser loads it — the background is not bundled, so that is its

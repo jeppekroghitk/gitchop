@@ -181,7 +181,7 @@ export async function fetchContributions(token, windows) {
   });
 
   /** @type {any} */
-  let payload = null;
+  let payload;
   try {
     payload = await response.json();
   } catch {

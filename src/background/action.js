@@ -10,7 +10,8 @@ import { readPullsCache, readPullsSettings } from './pulls-store.js';
  * pressed.
  */
 export async function paintAction() {
-  let granted = true;
+  /** @type {boolean} */
+  let granted;
   try {
     granted = await api.permissions.contains({ origins: ['https://github.com/*'] });
   } catch {
