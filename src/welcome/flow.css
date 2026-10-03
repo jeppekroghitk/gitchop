@@ -55,14 +55,16 @@
 }
 
 .gw-close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
   border: 1px solid var(--gw-line);
-  border-bottom-width: 2px;
-  border-radius: 6px;
+  border-radius: 50%;
   background: transparent;
   color: var(--gw-dim);
-  font: 500 11px/1 var(--gw-mono);
-  letter-spacing: 0.04em;
-  padding: 6px 8px 5px;
+  font: 300 24px/1 var(--gw-sans);
+  padding: 0 0 2px;
   cursor: pointer;
 }
 

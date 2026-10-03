@@ -209,7 +209,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   topEnd.append(stepsEl);
   if (overlay) {
     // Escape is not the only way out; a takeover with no visible door reads as a trap.
-    const close = button('esc', () => escape(), { quiet: true });
+    const close = button('×', () => escape(), { quiet: true });
     close.className = 'gw-close';
     close.setAttribute('aria-label', 'Close');
     close.title = 'Close (Esc)';
@@ -885,8 +885,8 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   };
 
   /**
-   * Escape over GitHub, or the close button: the caller puts the welcome aside and calls abandon,
-   * so the next press is the menu.
+   * Escape over GitHub, or the close button: the caller closes the overlay and calls abandon. The
+   * welcome is not put aside, so the next press greets again.
    */
   function escape() {
     onEscape?.();

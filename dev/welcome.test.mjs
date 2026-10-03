@@ -90,7 +90,8 @@ test('the first press is owed the welcome until there is a sign-in, a token or i
   reset();
   assert.equal((await send({ type: 'gitchop:welcome' })).first, true, 'a fresh profile: the welcome, in place of the menu');
 
-  // Escape, or Continue without signing in, or the end of the welcome: each sends this.
+  // Continue without signing in, or the end of the welcome, sends this; Escape and the close
+  // button only close it, so it greets the next press again.
   assert.deepEqual(await send({ type: 'gitchop:welcome:done' }), { ok: true });
   assert.equal(local.data.welcomed, true, 'the mark the content script reads straight from storage');
   assert.equal((await send({ type: 'gitchop:welcome' })).first, false, 'put aside: the next press is the menu, for good');

@@ -107,17 +107,12 @@ function install() {
   // when a token arrives or leaves. Until the first answer is in it is null, and a press then
   // takes the answer the menu's own data carries (see onPress in src/lib/welcome.js). Each read
   // is numbered, and only the newest may land: an older one that went the long way round must
-  // not put back a welcome that a newer read, or this tab, has since settled.
+  // not put back a welcome that a newer read has since settled.
   /** @type {boolean | null} */
   let owed = null;
   let owedRead = 0;
   // Once the menu has been shown in this tab, the welcome never follows it here.
   let menuSeen = false;
-  /** @param {boolean} value */
-  function settleOwed(value) {
-    owedRead += 1;
-    owed = value;
-  }
   async function readOwed() {
     const read = ++owedRead;
     let next = false;
@@ -306,7 +301,6 @@ function install() {
       },
     });
     state.welcome = welcome;
-    settleOwed(false);
     stage.menuLayer.append(welcome.element);
     stage.revealPanel(welcome.element, { now });
     welcome.start();
@@ -340,13 +334,10 @@ function install() {
     state.welcome = null;
     window.removeEventListener('resize', onResize);
 
-    // However the welcome was left — Escape, or its close button — it is not shown again, and a
-    // code it was showing is called off.
-    if (welcome) {
-      welcome.abandon();
-      settleOwed(false);
-      ask({ type: 'gitchop:welcome:done' });
-    }
+    // Closed — Escape, or its close button — the welcome is only put off, and greets the next
+    // press again; a code it was showing is called off. Only "Continue without signing in", or
+    // finishing, puts it aside for good.
+    if (welcome) welcome.abandon();
     menu?.closed();
     if (menu || welcome) /** @type {NonNullable<typeof stage>} */ (stage).close();
     else stage?.destroy();
