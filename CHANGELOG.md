@@ -19,6 +19,9 @@ it from.
   closes itself and the sign-in carries on in the overlay. The steps, numbered, head each screen.
   Escape or closing it calls off a code on screen. Updating from 2.9 or older counts as welcomed,
   as does a first sign-in or token, so the welcome never replaces a menu someone already uses.
+- Back from approving on GitHub, the welcome says it is finishing the sign-in by itself while it
+  checks, then shows *Connected to GitHub* for a moment before the organisations. If the code was
+  not approved after all, the code comes back with a line saying so.
 - Escape closes gitchop from the pull requests and news columns too, instead of first moving the
   cursor back to the links.
 - Sign in with GitHub ([#17](https://github.com/jeppekroghitk/gitchop/issues/17)). Settings shows a

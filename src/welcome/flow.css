@@ -509,6 +509,26 @@
   color: var(--gw-soft);
 }
 
+.gw-done-mark {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 32px;
+  border-radius: 50%;
+  background: var(--gw-accent);
+  color: var(--gw-bg);
+  font: 600 30px/1 var(--gw-sans);
+  animation: gw-done 420ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes gw-done {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
 .gw-pulse {
   width: 7px;
   height: 7px;
@@ -640,7 +660,8 @@
   .gw-keycap.pressed,
   .gw-key.pressed,
   .gw-code[data-waiting="true"] .gw-code-key,
-  .gw-pulse {
+  .gw-pulse,
+  .gw-done-mark {
     animation: none;
   }
 }

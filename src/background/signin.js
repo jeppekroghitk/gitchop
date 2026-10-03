@@ -33,8 +33,10 @@ export { SIGNIN_ALARM };
 /**
  * One poll's answer. `network` is GitHub out of reach, which is not the end of the code; `none` is
  * no flow under way here, because another tab finished it or it was cancelled. `state` comes with
- * the answers that change what the token card shows.
- * @typedef {{ status: PollStatus | 'network' | 'none', interval: number, error: string | null, state: SyncState | null }} SignInPoll
+ * the answers that change what the token card shows. `early` marks a `pending` that GitHub was not
+ * asked for, because its interval had not run yet, so it says nothing about whether the user has
+ * approved.
+ * @typedef {{ status: PollStatus | 'network' | 'none', interval: number, error: string | null, state: SyncState | null, early?: boolean }} SignInPoll
  */
 
 /** A code is handed back rather than replaced while it has at least this long left. */
@@ -145,7 +147,7 @@ async function poll() {
     await clearSignIn();
     return { status: 'expired', interval: session.interval, error: null, state: null };
   }
-  if (at < session.nextPollAt) return { status: 'pending', interval: session.interval, error: null, state: null };
+  if (at < session.nextPollAt) return { status: 'pending', interval: session.interval, error: null, state: null, early: true };
 
   /** @type {import('../lib/signin.js').PollOutcome} */
   let outcome;

@@ -188,6 +188,17 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   /** @type {string[]} */
   let linkOwners = [];
   let checking = false;
+  /**
+   * Back from GitHub with a code on screen: the user has most likely just approved it, and until
+   * GitHub has been asked, the screen says it is finishing by itself, so nobody wonders whether
+   * there is something left to do.
+   */
+  let confirming = false;
+  /** GitHub was asked after the user came back, and the code was still not approved. */
+  let notApproved = false;
+  /** Signed in a moment ago: the login, shown briefly before the organisations. */
+  /** @type {string | null} */
+  let connectedAs = null;
   /** @type {string | null} */
   let installError = null;
   /** @type {ReturnType<typeof setTimeout> | null} */
@@ -369,7 +380,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   function footer() {
     if (screen === 'hello') return [button('Continue without signing in', skip, { quiet: true })];
     if (screen === 'consent') return overlay ? [button('Continue without signing in', skip, { quiet: true })] : [button('Not now', notNow, { quiet: true })];
-    if (screen === 'signin') return flow?.phase === 'disabled' ? [] : [button('Continue without signing in', skip, { quiet: true })];
+    if (screen === 'signin') return flow?.phase === 'disabled' || connectedAs ? [] : [button('Continue without signing in', skip, { quiet: true })];
     if (screen === 'access') {
       const app = appEntry(sync);
       const done = app && app.installations && reachedAll(app);
@@ -480,6 +491,20 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
 
   function signInScreen() {
     paintSteps('signin');
+    if (connectedAs) {
+      // The sign-in is done: its step is ticked off while the screen still says so.
+      paintSteps('orgs');
+      return [el('p', 'gw-done-mark', '✓'), el('h1', 'gw-title', 'Connected to GitHub'), el('p', 'gw-lede', `Signed in as @${connectedAs}.`)];
+    }
+    if (confirming && flow?.phase === 'code') {
+      const status = el('p', 'gw-status');
+      status.append(el('span', 'gw-pulse'), el('span', 'gw-status-line', 'Checking with GitHub…'));
+      return [
+        el('h1', 'gw-title', 'Finishing your sign-in'),
+        el('p', 'gw-lede', 'gitchop is checking with GitHub that you approved the connection. This continues by itself.'),
+        status,
+      ];
+    }
     if (!flow || flow.phase === 'starting' || flow.phase === 'code') {
       const code = flow?.phase === 'code' && flow.code ? flow.code : null;
       const open = linkButton('Open GitHub', code?.verificationUri ?? DEVICE_URL, { primary: true });
@@ -492,7 +517,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
       }
       const status = el('p', 'gw-status');
       status.dataset.network = String(flow?.status === 'network');
-      status.append(el('span', 'gw-pulse'), el('span', 'gw-status-line', code ? statusLine(flow) : 'Asking GitHub for a code…'));
+      status.append(el('span', 'gw-pulse'), el('span', 'gw-status-line', code ? waitingLine() : 'Asking GitHub for a code…'));
       if (code) status.append(el('span', 'gw-count', countdown(code.expiresAt)));
       // Typing a code into GitHub for something unfamiliar reads as a trick unless it says what
       // is being connected, what that may do, and how it is undone.
@@ -722,9 +747,17 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   /** @param {SignInCode} code */
   function showCode(code) {
     flow = { phase: 'code', code, interval: code.interval, status: 'waiting' };
+    confirming = false;
+    notApproved = false;
     announce(`Your sign-in code is ${code.userCode.split('').join(' ')}. It expires in ${minutesLeft(code.expiresAt)}. Type it on GitHub’s device page.`);
     schedule(code.interval);
     startTick();
+  }
+
+  /** The line under the code: GitHub out of reach, or still waiting — and after a check that found nothing, says so. */
+  function waitingLine() {
+    if (flow?.status !== 'network' && notApproved) return 'Not approved yet. Enter the code on GitHub to continue.';
+    return statusLine(flow);
   }
 
   function updateStatus() {
@@ -732,7 +765,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     const line = screenEl.querySelector('.gw-status-line');
     if (!status || !line) return;
     /** @type {HTMLElement} */ (status).dataset.network = String(flow?.status === 'network');
-    const text = statusLine(flow);
+    const text = waitingLine();
     if (line.textContent === text) return;
     line.textContent = text;
     announce(text);
@@ -753,21 +786,41 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
       return;
     }
     if (flow?.phase !== 'code' || gone) return;
+    // Checking after a return: a pending GitHub was not yet asked for proves nothing, so the
+    // check goes on, a second at a time, until GitHub's own interval lets it ask.
+    if (confirming && reply.status === 'pending' && reply.early) {
+      pollTimer = setTimeout(pollOnce, 1000);
+      return;
+    }
     const next = afterPoll(flow, reply);
     flow = next.flow;
     if (next.verdict === 'waiting' && flow) {
       schedule(flow.interval);
-      updateStatus();
+      if (confirming) {
+        // GitHub answered and the code is not approved: the code comes back, with a line saying so.
+        confirming = false;
+        notApproved = flow.status !== 'network';
+        render({ focus: true });
+        if (notApproved) announce(waitingLine());
+      } else updateStatus();
       return;
     }
     stopTimers();
+    confirming = false;
     if (next.verdict === 'signed-in' || next.verdict === 'gone') {
       sync = reply.state ?? (await ask({ type: 'gitchop:sync:state' }).catch(() => sync));
       const app = appEntry(sync);
       if (app && !app.needsSignIn) {
-        announce('Signed in with GitHub.');
-        go('access');
         if (app.installations === null || app.installations === undefined) checkInstallations();
+        // A beat on "Connected" first, so the move to the next step reads as the result of the
+        // approval rather than as something that happened on its own.
+        connectedAs = app.login ?? 'you';
+        announce(`Connected to GitHub. Signed in as ${connectedAs}.`);
+        render();
+        setTimeout(() => {
+          connectedAs = null;
+          if (!gone && screen === 'signin') go('access');
+        }, 1400);
       } else go('hello');
       return;
     }
@@ -862,6 +915,11 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   function back() {
     if (!away) return;
     away = false;
+    if (flow?.phase === 'code' && screen === 'signin' && pollTimer) {
+      confirming = true;
+      notApproved = false;
+      render();
+    }
     pollOnReturn();
     recheckConsent();
     setTimeout(recheckOnReturn, 600);
