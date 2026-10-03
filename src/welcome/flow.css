@@ -95,27 +95,20 @@
 }
 
 .gw-wordmark b,
-.gw-brand b,
-.gw-brand-inline b {
+.gw-brand b {
   color: var(--gw-accent);
   font-weight: inherit;
 }
 
-.gw[data-variant="page"][data-screen="hello"] .gw-wordmark,
-.gw[data-variant="overlay"][data-screen="hello"] .gw-wordmark {
+.gw[data-variant="page"][data-screen="hello"] .gw-wordmark {
   visibility: hidden;
 }
 
 .gw-brand {
-  font: 600 30px/1 var(--gw-sans);
-  letter-spacing: -0.02em;
-  color: var(--gw-soft);
-}
-
-.gw-brand-inline {
-  display: inline;
-  font-weight: 500;
-  color: var(--gw-soft);
+  font: 600 18px/1 var(--gw-mono);
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--gw-dim);
 }
 
 .gw-screen > .gw-brand + .gw-hero-key {
@@ -136,7 +129,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font: 600 11px/1 var(--gw-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--gw-dim);
 }
 
@@ -298,9 +293,9 @@
 }
 
 .gw-title {
-  max-width: 20ch;
-  font: 300 40px/1.15 var(--gw-sans);
-  letter-spacing: -0.02em;
+  max-width: 18ch;
+  font: 800 52px/1.02 var(--gw-sans);
+  letter-spacing: -0.045em;
   color: var(--gw-text);
   text-wrap: balance;
 }
@@ -308,8 +303,8 @@
 .gw-screen[data-screen="access"] .gw-title,
 .gw-screen[data-screen="signin"] .gw-title,
 .gw-screen[data-screen="consent"] .gw-title {
-  max-width: 24ch;
-  font-size: 32px;
+  max-width: 22ch;
+  font-size: 40px;
 }
 
 .gw-key {
@@ -373,9 +368,10 @@
   border-radius: 0;
   background: transparent;
   color: var(--gw-text);
-  font: 500 14px/1 var(--gw-sans);
-  letter-spacing: normal;
-  padding: 12px 20px;
+  font: 600 12px/1 var(--gw-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 13px 20px;
   text-decoration: none;
   cursor: pointer;
 }
@@ -396,8 +392,8 @@
 }
 
 .gw-btn-big {
-  padding: 17px 36px;
-  font-size: 16px;
+  padding: 18px 36px;
+  font-size: 13px;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 18px 40px -16px rgba(255, 255, 255, 0.3);
 }
 
@@ -578,13 +574,13 @@
   }
 
   .gw-title {
-    font-size: 30px;
+    font-size: 36px;
   }
 
   .gw-screen[data-screen="access"] .gw-title,
   .gw-screen[data-screen="signin"] .gw-title,
   .gw-screen[data-screen="consent"] .gw-title {
-    font-size: 26px;
+    font-size: 30px;
   }
 
   .gw-code {
@@ -609,7 +605,7 @@
   }
 
   .gw-brand {
-    font-size: 26px;
+    font-size: 15px;
   }
 }
 

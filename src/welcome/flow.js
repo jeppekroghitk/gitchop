@@ -377,13 +377,10 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     const go = button('Sign in with GitHub', begin, { primary: true });
     go.classList.add('gw-btn-big');
     if (overlay) {
-      const title = el('h1', 'gw-title');
-      title.append('Welcome to ', wordmark('gw-brand-inline'));
       return [
-        title,
-        el('p', 'gw-lede', 'Sign in to add your private repositories to search, with your pull requests beside them.'),
+        el('h1', 'gw-title', 'Welcome to gitchop.'),
+        el('p', 'gw-lede', 'Sign in with GitHub to unlock everything gitchop can do.'),
         actions(go),
-        el('p', 'gw-fine', 'gitchop only reads, and talks to nobody but GitHub.'),
       ];
     }
     const title = el('h1', 'gw-title');
@@ -394,7 +391,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
       title,
       el('p', 'gw-lede', 'Your links and instant repository search, right over the page you are on.'),
       actions(go),
-      el('p', 'gw-fine', 'Signing in adds your private repositories to search, plus pull requests, news and backup. gitchop only reads your repositories, and talks to nobody but GitHub.'),
+      el('p', 'gw-fine', 'Sign in with GitHub to unlock everything gitchop can do.'),
     ];
   }
 
