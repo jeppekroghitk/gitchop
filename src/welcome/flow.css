@@ -499,6 +499,10 @@
   }
 }
 
+.gw-status[hidden] {
+  display: none;
+}
+
 .gw-status {
   display: flex;
   flex-wrap: wrap;

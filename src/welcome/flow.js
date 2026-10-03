@@ -517,8 +517,11 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
       }
       const status = el('p', 'gw-status');
       status.dataset.network = String(flow?.status === 'network');
-      status.append(el('span', 'gw-pulse'), el('span', 'gw-status-line', code ? waitingLine() : 'Asking GitHub for a code…'));
-      if (code) status.append(el('span', 'gw-count', countdown(code.expiresAt)));
+      // While all is well there is nothing to add under the code: a ticking clock and a standing
+      // "waiting for you" read as pressure. The line appears only for what the user should know.
+      const said = code ? waitingLine() : 'Asking GitHub for a code…';
+      status.append(el('span', 'gw-pulse'), el('span', 'gw-status-line', said));
+      status.hidden = !said;
       // Typing a code into GitHub for something unfamiliar reads as a trick unless it says what
       // is being connected, what that may do, and how it is undone.
       return [
@@ -530,7 +533,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
         el(
           'p',
           'gw-fine',
-          'gitchop connects through its own GitHub app, so it never sees your password. The app can read your repositories, issues and pull requests, but never change them, and keeps your settings backup in a secret gist. You can disconnect it at any time in your GitHub settings.',
+          'gitchop connects through its own GitHub app. It can read your repositories but never change them, and you can disconnect it at any time in your GitHub settings.',
         ),
       ];
     }
@@ -756,8 +759,8 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
 
   /** The line under the code: GitHub out of reach, or still waiting — and after a check that found nothing, says so. */
   function waitingLine() {
-    if (flow?.status !== 'network' && notApproved) return 'Not approved yet. Enter the code on GitHub to continue.';
-    return statusLine(flow);
+    if (flow?.status === 'network') return statusLine(flow);
+    return notApproved ? 'Not approved yet. Enter the code on GitHub to continue.' : '';
   }
 
   function updateStatus() {
@@ -766,9 +769,10 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     if (!status || !line) return;
     /** @type {HTMLElement} */ (status).dataset.network = String(flow?.status === 'network');
     const text = waitingLine();
+    /** @type {HTMLElement} */ (status).hidden = !text;
     if (line.textContent === text) return;
     line.textContent = text;
-    announce(text);
+    if (text) announce(text);
   }
 
   async function pollOnce() {
