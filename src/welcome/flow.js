@@ -206,7 +206,6 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   const stepsEl = el('ol', 'gw-steps');
   stepsEl.hidden = true;
   const topEnd = el('div', 'gw-top-end');
-  topEnd.append(stepsEl);
   if (overlay) {
     // Escape is not the only way out; a takeover with no visible door reads as a trap.
     const close = button('×', () => escape(), { quiet: true });
@@ -215,7 +214,8 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     close.title = 'Close (Esc)';
     topEnd.append(close);
   }
-  top.append(wordmark('gw-wordmark'), topEnd);
+  // The steps sit on the centre line the screens below are set on, not off in a corner.
+  top.append(wordmark('gw-wordmark'), stepsEl, topEnd);
   const screenEl = el('main', 'gw-screen');
   screenEl.tabIndex = -1;
   const bottomEl = el('footer', 'gw-bottom');
