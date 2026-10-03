@@ -1,11 +1,14 @@
-import { api } from '../lib/links.js';
+import { send } from '../lib/messages.js';
 import { tokenGate } from './pages.js';
 
-const host = document.getElementById('index');
-const statusEl = document.getElementById('index-status');
-/** Under the card: what is worth knowing about the index as it stands. */
-const notes = document.getElementById('index-notes');
+/** @import { Answer, Message, MessageType } from '../background/messages.js' */
 
+const host = /** @type {HTMLElement} */ (document.getElementById('index'));
+const statusEl = /** @type {HTMLElement} */ (document.getElementById('index-status'));
+/** Under the card: what is worth knowing about the index as it stands. */
+const notes = /** @type {HTMLElement} */ (document.getElementById('index-notes'));
+
+/** @type {number | null} */
 let statusTimer = null;
 let busy = false;
 
@@ -18,8 +21,13 @@ function flash(text) {
   }, 2600);
 }
 
+/**
+ * @template {MessageType} T
+ * @param {Message<T>} message
+ * @returns {Promise<Answer<T>>}
+ */
 async function ask(message) {
-  const response = await api.runtime.sendMessage(message);
+  const response = await send(message);
   if (!response?.ok) throw new Error(response?.error ?? 'The background script did not answer.');
   return response;
 }

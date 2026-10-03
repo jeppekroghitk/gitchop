@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 /**
- * Serves the repository over http for the harness. The menu runs straight from file://, but the
- * settings page is ES modules, and no browser loads those from file:// — so this is what lets
- * `dev/harness.html` open it. Bound to 127.0.0.1 only: that counts as a secure context, which the
- * page's crypto.randomUUID needs, and nothing else on the network gets a look at the source tree.
+ * Serves the repository over http for the harness. The content script and the settings page's
+ * stage reach the browser as bundles (dev/bundle.mjs), so the paths a package carries them at —
+ * `/content.js` and `/src/options/stage.js` — and the harness's own `/dev/content.js` are bundled
+ * from src/ on every request, never cached: edit, reload, and the harness runs the change, whatever
+ * stale copy dev/content.js holds on disk. Everything else is the file as it is.
+ * Bound to 127.0.0.1 only: that counts as a secure context, which the page's crypto.randomUUID
+ * needs, and nothing else on the network gets a look at the source tree.
  *
  * Usage: node dev/serve.mjs [port] [--open]      (8765 unless told otherwise; --open opens the harness)
  */
@@ -12,9 +15,8 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { BUNDLES, HARNESS_COPY, bundle, root } from './bundle.mjs';
 
-const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const args = process.argv.slice(2);
 const port = Number(args.find((arg) => /^\d+$/.test(arg)) ?? 8765);
 const openBrowser = args.includes('--open');
@@ -46,6 +48,19 @@ const server = createServer(async (request, response) => {
   }
   // Nothing outside the repository, however the path is spelled.
   if (file !== root && !file.startsWith(root + path.sep)) return refuse(response, 403, 'Forbidden');
+
+  const bundled = pathname === `/${HARNESS_COPY}` ? BUNDLES[0] : BUNDLES.find((spec) => `/${spec.out}` === pathname);
+  if (bundled) {
+    let text;
+    try {
+      ({ text } = await bundle(bundled));
+    } catch (error) {
+      console.error(String(error.message ?? error));
+      return refuse(response, 500, `Could not bundle ${bundled.entry}:\n${error.message ?? error}`);
+    }
+    response.writeHead(200, { 'content-type': TYPES['.js'], 'cache-control': 'no-store' });
+    return response.end(text);
+  }
 
   let info;
   try {

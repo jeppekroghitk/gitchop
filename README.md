@@ -75,13 +75,53 @@ panel stays. Without it, the column nearest where the panel would be — the pul
 news alone — ends in a strip with a *settings* word that opens Settings, since the row that did so
 sits in the links; the toolbar icon opens Settings either way.
 
+## Welcome
+
+Nothing opens on install. The first time you press <kbd>.</kbd> on GitHub, the chop plays and a
+short welcome takes the menu's place: what signing in unlocks, and **Sign in with GitHub**, carried
+out right there in the overlay — the code, GitHub's device page in a new tab, then the
+organisations to install the app on — ending in the menu. **Continue without signing in** at the
+bottom, or Escape, puts it aside, and it never shows again. Until you sign in, save a token or put
+the welcome aside, the toolbar button opens the same welcome on a page of its own rather than
+Settings. While nothing is signed in, the menu ends in one quiet row, *Sign in to search your
+private repositories*, that starts the sign-in in the overlay; its ✕ hides it for good. On Firefox,
+until you have consented to gitchop holding a token, the overlay says so first and, on your click,
+opens a gitchop tab with that one question; answer it and the tab closes, back to GitHub, where the
+sign-in carries on in the overlay. Updating from 2.9 or older shows no welcome: the key stays the
+menu you know, with the sign-in row at the end.
+
+Chrome does not add gitchop to GitHub tabs that were already open when you installed it: reload
+them, or open a new one, before pressing <kbd>.</kbd>.
+
+## Signing in
+
+**Sign in with GitHub**, in the welcome or under Sign-in in Settings, is how gitchop reaches your private repositories,
+pull requests and gist. It shows a short code; open github.com/login/device, type the code, and
+approve *gitchop for GitHub*. The page carries on by itself and says *Signed in as @you*. The sign-in
+renews itself in the background every eight hours or so, and after about six months unused, or if
+GitHub refuses a renewal, the card says *signed out* with **Sign in again**. **Sign out** forgets it
+here; revoke it on GitHub at github.com/settings/applications.
+
+Signing in uses a GitHub App, so what it can read is read-only — Metadata, Contents, Issues and Pull
+requests — plus Gists for the backup, and the repository part works only where the app is
+installed. After you sign in, the card lists where it is installed and, for your own account and
+the organisations in your links that do not have it, an **Install on @org** link. Organisations a
+saved fine-grained token already reaches are listed as covered by that token instead. You pick the
+repositories on GitHub; an organisation owner installs at once, while a member's install becomes a
+request to the owners. Until an organisation has the app or a token, gitchop sees only its public
+repositories, with no error from GitHub to say so — add a personal access token for that
+organisation instead, from the same card. Signing in counts only your public contributions; a
+classic token with `read:user` is still the way to count private ones.
+
 ## Private repositories
 
-GitHub's search does not return private repositories. To find them, add a GitHub token in Settings
-and press **Build index** — gitchop then keeps its own list of the repositories your token can reach,
-and matches it locally.
+GitHub's search does not return private repositories. To find them, sign in or add a GitHub token in
+Settings and press **Build index** — gitchop then keeps its own list of the repositories your tokens
+can reach, and matches it locally. A search that names an owner goes out with the token that sees the
+most of that owner, and a bare word with the widest reach you have.
 
-Settings recommends a fine-grained token and warns against a classic one: the `repo` scope a classic
+Personal access tokens are under **Advanced** on the Sign-in page, and work beside a sign-in. Settings
+recommends a fine-grained token and warns against a classic one: the `repo` scope a classic
 token needs grants write to every repository the account can reach, in every organisation, and
 gitchop only ever reads. The fine-grained recipe is three steps. Name the owner — the exact name of
 the organisation, or blank for your own account — and the link opens GitHub's form for that owner
@@ -115,8 +155,8 @@ your PRs*. A lane that empties says so. The toolbar icon carries the number wait
 know before you press the key. Settings has a switch for the column under Panels, and for the badge
 and whether drafts count under Pull requests.
 
-It needs a token that can read pull requests: a classic token with `repo`, or a fine-grained one with
-**Pull requests: read-only**. A fine-grained token that was only granted Metadata is enough for the
+It needs a sign-in or a token that can read pull requests: a classic token with `repo`, or a
+fine-grained one with **Pull requests: read-only**. A fine-grained token that was only granted Metadata is enough for the
 index but shows the lanes empty rather than refusing — GitHub returns less, not an error. Viewports
 narrower than about 980 px have no room for it, and the menu is what it always was.
 
@@ -167,7 +207,9 @@ year has something to stand beside. It is not a link; it is there to be looked a
 
 It is one GraphQL request per saved token, asking for this year from January the 1st to now and for
 each of the three whole years before, and the highest count for this year is the one shown, its past
-years with it — a fine-grained token sees fewer repositories than a classic one and may count fewer.
+years with it — a fine-grained token or a sign-in sees fewer repositories than a classic one and
+may count fewer. Private contributions are counted only for a classic token with `read:user`, which
+the classic token link asks for.
 A switch under Panels in Settings turns it off.
 
 ## The gauge
@@ -193,28 +235,49 @@ secret gist under **Backup** in Settings and every change is written there as a 
 links, the repositories you subscribe to for news and the edition hour, the switches under Panels and
 Pull requests, and the chop. Tokens never go in it. A pull replaces what is here with what the gist
 holds; a gist made by an earlier version holds only links, and is written back whole once read. The
-gist is written with whichever saved token can reach it: a fine-grained token for your own account,
-which the token link asks Gists for when the owner is left blank, or a classic token with `gist`.
+gist is written with whichever can reach it: a sign-in, which holds Gists without installing the app
+anywhere, a fine-grained token for your own account, which the token link asks Gists for when the
+owner is left blank, or a classic token with `gist`.
 
 [PRIVACY.md](PRIVACY.md) covers what is stored and what is sent to GitHub.
 
 ## Development
 
-No build step for the code — the files in `src/` are what runs. Packaging only chooses which
-`manifest.json` each browser gets, since the two disagree about the background script.
+The content script is ES modules that [esbuild](https://esbuild.github.io) bundles into each
+package — content scripts cannot import anything on their own — and so is the stage the settings
+page previews the chop with, so the repository root is not an extension you can load as it
+stands. Install the build's tools once, then build and load `dist/<browser>`:
 
 ```sh
-node dev/context.test.mjs && node dev/repos.test.mjs && node dev/effects.test.mjs && node dev/pulls.test.mjs && node dev/news.test.mjs && node dev/contributions.test.mjs && node dev/odometer.test.mjs && node dev/links.test.mjs && node dev/gist.test.mjs && node dev/rate.test.mjs && node dev/menu.test.mjs
+npm ci                                                 # esbuild, TypeScript and ESLint, pinned by package-lock.json
+node dev/build.mjs firefox --no-zip                    # dist/firefox: about:debugging → This Firefox → Load Temporary Add-on → its manifest.json
+node dev/build.mjs chrome --no-zip                     # dist/chrome: chrome://extensions → Load unpacked
+node dev/build.mjs firefox --watch                     # the same, rebuilt on every change; reload the extension to pick it up
 node dev/build.mjs all                                 # dist/gitchop-<version>-<browser>.<ext>
-node dev/build.mjs chrome --no-zip                     # unpacked, for chrome://extensions
-open dev/harness.html                                  # the menu, without installing
-node dev/serve.mjs --open                              # the same over http, where Settings opens the real settings page
 ```
 
-With [Task](https://taskfile.dev) installed, the same three are `task test`, `task build` and
-`task harness`; `task` alone lists them.
+Nothing is minified and there are no source maps: the bundles are the sources joined up, though
+where two modules declare the same name esbuild numbers one of them (`node2`). Packaging also
+chooses which `manifest.json` each browser gets, since the two disagree about the background
+script, which reaches the browser unbundled.
 
-The build refuses to package a manifest whose files do not resolve, imports included — with no
-bundler in the way, that is the safety net.
+```sh
+npm test                                               # node --test over every dev/*.test.mjs; one file alone is node --test dev/<name>.test.mjs
+npm run lint                                           # ESLint: the recommended rules, with the globals of wherever each directory runs
+npm run typecheck                                      # tsc -p .: the JavaScript checked from its JSDoc, nothing emitted; types/ declares the extension APIs
+node dev/serve.mjs --open                              # the harness: the menu without installing, and Settings opens the real settings page
+```
+
+Over the server, the harness bundles the content script and the settings page's stage from `src/`
+on every request, so a reload runs whatever was just saved. Opened from `file://` — handy for
+headless screenshots — it runs `dev/content.js` instead, a git-ignored copy that every build and
+`node dev/bundle.mjs` write; the settings page needs the server either way.
+
+With [Task](https://taskfile.dev) installed, the same are `task test`, `task lint`, `task typecheck`,
+`task build`, `task watch` and `task harness`; `task` alone lists them.
+
+The build refuses to package a manifest whose files do not resolve, imports included, or a script
+that would not parse the way the browser loads it — the background is not bundled, so that is its
+safety net.
 
 [Releasing](dev/RELEASING.md) · [Changelog](CHANGELOG.md) · MIT

@@ -3,6 +3,36 @@ const DAY = 24 * 60 * 60 * 1000;
 
 export const SETTINGS_KEY = 'news';
 
+/** @typedef {{ enabled: number, hour: number, days: number, repos: string[] }} NewsSettings */
+
+/**
+ * What an edition covers, as ISO stamps: from `since`, up to but not including `until`.
+ * @typedef {{ since: string, until: string }} EditionWindow
+ */
+
+/** @typedef {{ number: number, title: string, url: string, author: string }} IssueLike */
+
+/**
+ * One repository's window, as fetched and kept in the edition.
+ * @typedef {{
+ *   repo: string,
+ *   url: string,
+ *   private: boolean,
+ *   commits: { count: number, authors: string[], branch: string, recent: { sha: string, message: string, author: string, url: string }[], more: boolean },
+ *   pulls: { merged: IssueLike[], opened: IssueLike[], closed: IssueLike[], more: boolean },
+ *   issues: { opened: IssueLike[], closed: IssueLike[], more: boolean },
+ *   releases: { tag: string, name: string, url: string, prerelease: boolean }[],
+ *   error: string | null,
+ * }} Digest
+ */
+
+/**
+ * A fact the menu can hover or land on: its popover lists every item, and Enter opens `url`.
+ * @typedef {{ kind: string, url: string, items: { title: string, detail: string, url: string }[], more: boolean }} Chip
+ */
+
+/** @typedef {{ text: string, chip?: Chip }} Segment */
+
 /** A fine-grained slug: one owner, one name, the characters GitHub allows in either. */
 const REPO_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9._-]+$/;
 const MAX_REPOS = 30;
@@ -61,11 +91,19 @@ export const DEFAULTS = {
   repos: [],
 };
 
+/**
+ * @param {unknown} name
+ * @returns {name is string}
+ */
 export function isRepoName(name) {
   return typeof name === 'string' && name.length <= 140 && REPO_NAME.test(name);
 }
 
-/** Case is kept as typed for display, compared without it: itk-dev/Economics is itk-dev/economics. */
+/**
+ * Case is kept as typed for display, compared without it: itk-dev/Economics is itk-dev/economics.
+ * @param {unknown} a
+ * @param {unknown} b
+ */
 function sameRepo(a, b) {
   return String(a).toLowerCase() === String(b).toLowerCase();
 }
@@ -73,9 +111,13 @@ function sameRepo(a, b) {
 /**
  * Storage is shared state: whatever shape comes back, every switch ends up on or off, the hour is
  * a whole one on the clock, and the repositories are well-formed slugs with no repeats.
+ * @param {unknown} [raw]
+ * @returns {NewsSettings}
  */
 export function sanitizeSettings(raw) {
-  const source = raw && typeof raw === 'object' ? raw : {};
+  /** @type {Record<string, unknown>} */
+  const source = raw && typeof raw === 'object' ? /** @type {Record<string, unknown>} */ (raw) : {};
+  /** @type {Record<string, any>} */
   const settings = {};
   for (const { id, value } of SWITCHES) {
     const number = Number(source[id]);
@@ -86,6 +128,7 @@ export function sanitizeSettings(raw) {
   const days = Number(source.days);
   settings.days = Number.isInteger(days) && days >= DAYS.min && days <= DAYS.max ? days : DAYS.value;
 
+  /** @type {string[]} */
   const repos = [];
   for (const entry of Array.isArray(source.repos) ? source.repos : []) {
     const name = String(entry ?? '').trim();
@@ -94,14 +137,25 @@ export function sanitizeSettings(raw) {
     if (repos.length >= MAX_REPOS) break;
   }
   settings.repos = repos;
-  return settings;
+  return /** @type {NewsSettings} */ (settings);
 }
 
+/**
+ * @param {{ repos?: string[] } | null | undefined} settings
+ * @param {string} repo
+ * @returns {boolean}
+ */
 export function isSubscribed(settings, repo) {
   return (settings?.repos ?? []).some((seen) => sameRepo(seen, repo));
 }
 
-/** The list with `repo` added or removed; the same list back when nothing changes. */
+/**
+ * The list with `repo` added or removed; the same list back when nothing changes.
+ * @param {{ repos?: string[] } | null | undefined} settings
+ * @param {unknown} repo
+ * @param {boolean} subscribe
+ * @returns {string[]}
+ */
 export function toggleRepo(settings, repo, subscribe) {
   const name = String(repo ?? '').trim();
   const repos = settings?.repos ?? [];
@@ -118,6 +172,9 @@ export function toggleRepo(settings, repo, subscribe) {
 /**
  * When the edition is made up: the most recent `hour` o'clock, local time, that has already
  * passed. Local because the hour is what the person reads it at, not a UTC boundary.
+ * @param {number} now
+ * @param {number} hour
+ * @returns {number}
  */
 export function editionTime(now, hour) {
   const at = new Date(now);
@@ -126,7 +183,12 @@ export function editionTime(now, hour) {
   return at.valueOf();
 }
 
-/** The `hour` o'clock after `now` — where the alarm for the next edition goes. */
+/**
+ * The `hour` o'clock after `now` — where the alarm for the next edition goes.
+ * @param {number} now
+ * @param {number} hour
+ * @returns {number}
+ */
 export function nextEditionTime(now, hour) {
   const at = new Date(editionTime(now, hour));
   at.setDate(at.getDate() + 1);
@@ -141,6 +203,11 @@ export function nextEditionTime(now, hour) {
  * span. Asked again for the same edition — a manual refresh, a repository subscribed at noon — it
  * keeps the window it had, so the header does not move. An edition made up under another span
  * says nothing about this one: change the span and the window is drawn afresh.
+ * @param {number} now
+ * @param {number} hour
+ * @param {{ since?: string, until?: string, days?: number } | null} [previous]
+ * @param {number} [days]
+ * @returns {EditionWindow}
  */
 export function editionWindow(now, hour, previous = null, days = DAYS.value) {
   const until = editionTime(now, hour);
@@ -156,7 +223,13 @@ export function editionWindow(now, hour, previous = null, days = DAYS.value) {
   return { since: new Date(since).toISOString(), until: new Date(until).toISOString() };
 }
 
-/** Whether the edition on file is the one Settings would make up now: the same cutoff, the same span. */
+/**
+ * Whether the edition on file is the one Settings would make up now: the same cutoff, the same span.
+ * @param {{ until?: string, days?: number } | null | undefined} cache
+ * @param {{ hour: number, days: number }} settings
+ * @param {number} now
+ * @returns {boolean}
+ */
 export function isCurrentEdition(cache, settings, now) {
   if (!cache?.until) return false;
   return Date.parse(cache.until) === editionTime(now, settings.hour) && (cache.days ?? DAYS.value) === settings.days;
@@ -165,16 +238,25 @@ export function isCurrentEdition(cache, settings, now) {
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** The rest of the menu is English; the clock is too, rather than whatever the locale would make of 08:00. */
+/**
+ * The rest of the menu is English; the clock is too, rather than whatever the locale would make of 08:00.
+ * @param {number} ms
+ */
 function clock(ms) {
   const at = new Date(ms);
   return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
 }
 
-/** "since yesterday 08:00", "since Friday 08:00", "since 3 Sep 08:00" — the header's one fact. */
+/**
+ * "since yesterday 08:00", "since Friday 08:00", "since 3 Sep 08:00" — the header's one fact.
+ * @param {string | null | undefined} sinceIso
+ * @param {number} [now]
+ * @returns {string}
+ */
 export function describeSince(sinceIso, now = Date.now()) {
   const since = Date.parse(sinceIso ?? '');
   if (Number.isNaN(since)) return '';
+  /** @type {(ms: number) => number} */
   const startOf = (ms) => new Date(new Date(ms).toDateString()).valueOf();
   const days = Math.round((startOf(now) - startOf(since)) / DAY);
   const at = new Date(since);
@@ -185,15 +267,21 @@ export function describeSince(sinceIso, now = Date.now()) {
   return `since ${at.getDate()} ${MONTHS[at.getMonth()]} ${time}`;
 }
 
+/**
+ * @param {string | null | undefined} iso
+ * @param {EditionWindow} window
+ */
 function within(iso, window) {
   const at = Date.parse(iso ?? '');
   return !Number.isNaN(at) && at >= Date.parse(window.since) && at < Date.parse(window.until);
 }
 
+/** @param {unknown} text */
 function firstLine(text) {
   return String(text ?? '').split('\n')[0].trim().slice(0, 140);
 }
 
+/** @param {{ login?: unknown } | null | undefined} user */
 function login(user) {
   return String(user?.login ?? '').slice(0, 60);
 }
@@ -203,11 +291,18 @@ function login(user) {
  * the popover can show the whole day without leaving the page. The author is the GitHub login when
  * GitHub matched one, else the name on the commit, so a rebased or unlinked commit still counts as
  * somebody's. `more` says the fetch stopped before the day did.
+ * @param {unknown} list
+ * @param {EditionWindow} window
+ * @param {string | null | undefined} branch
+ * @returns {Digest['commits']}
  */
 export function shapeCommits(list, window, branch) {
+  /** @type {any[]} */
   const raw = Array.isArray(list) ? list : [];
   const commits = raw.filter((entry) => within(entry?.commit?.committer?.date ?? entry?.commit?.author?.date, window));
+  /** @type {string[]} */
   const authors = [];
+  /** @type {Digest['commits']['recent']} */
   const recent = [];
   for (const entry of commits) {
     const name = login(entry.author) || String(entry.commit?.author?.name ?? '').trim().slice(0, 60);
@@ -231,6 +326,9 @@ export function shapeCommits(list, window, branch) {
 /**
  * A full page whose oldest item still moved inside the window may have left some behind; a full
  * page whose oldest item is older than the window has shown everything the window holds.
+ * @param {unknown} list
+ * @param {EditionWindow} window
+ * @param {number} [size]
  */
 function pageCut(list, window, size = PAGE) {
   if (!Array.isArray(list) || list.length < size) return false;
@@ -238,6 +336,10 @@ function pageCut(list, window, size = PAGE) {
   return Number.isNaN(oldest) || oldest >= Date.parse(window.since);
 }
 
+/**
+ * @param {any} item
+ * @returns {IssueLike}
+ */
 function shapeIssueLike(item) {
   return {
     number: Number(item.number) || 0,
@@ -250,10 +352,17 @@ function shapeIssueLike(item) {
 /**
  * A pull request is news for one reason at a time: merged beats opened beats closed without
  * merging, and a pull request opened and merged inside the window shows once, as merged.
+ * @param {unknown} list
+ * @param {EditionWindow} window
+ * @param {number} [size]
+ * @returns {Digest['pulls']}
  */
 export function shapePulls(list, window, size = PAGE) {
+  /** @type {IssueLike[]} */
   const merged = [];
+  /** @type {IssueLike[]} */
   const opened = [];
+  /** @type {IssueLike[]} */
   const closed = [];
   for (const item of Array.isArray(list) ? list : []) {
     if (!item || typeof item !== 'object' || !item.html_url) continue;
@@ -264,9 +373,17 @@ export function shapePulls(list, window, size = PAGE) {
   return { merged, opened, closed, more: pageCut(list, window, size) };
 }
 
-/** The issues endpoint returns pull requests too; anything carrying a pull_request key is not an issue. */
+/**
+ * The issues endpoint returns pull requests too; anything carrying a pull_request key is not an issue.
+ * @param {unknown} list
+ * @param {EditionWindow} window
+ * @param {number} [size]
+ * @returns {Digest['issues']}
+ */
 export function shapeIssues(list, window, size = PAGE) {
+  /** @type {IssueLike[]} */
   const opened = [];
+  /** @type {IssueLike[]} */
   const closed = [];
   for (const item of Array.isArray(list) ? list : []) {
     if (!item || typeof item !== 'object' || !item.html_url || item.pull_request) continue;
@@ -276,7 +393,12 @@ export function shapeIssues(list, window, size = PAGE) {
   return { opened, closed, more: pageCut(list, window, size) };
 }
 
-/** Drafts are not published; a prerelease is, and says so. */
+/**
+ * Drafts are not published; a prerelease is, and says so.
+ * @param {unknown} list
+ * @param {EditionWindow} window
+ * @returns {Digest['releases']}
+ */
 export function shapeReleases(list, window) {
   return (Array.isArray(list) ? list : [])
     .filter((item) => item && typeof item === 'object' && !item.draft && within(item.published_at, window))
@@ -288,6 +410,10 @@ export function shapeReleases(list, window) {
     }));
 }
 
+/**
+ * @param {string} repo
+ * @returns {Digest}
+ */
 export function emptyDigest(repo) {
   return {
     repo,
@@ -301,6 +427,10 @@ export function emptyDigest(repo) {
   };
 }
 
+/**
+ * @param {Partial<Digest> | null | undefined} digest
+ * @returns {boolean}
+ */
 export function isQuiet(digest) {
   if (!digest) return true;
   const { commits, pulls, issues, releases } = digest;
@@ -312,35 +442,62 @@ export function isQuiet(digest) {
   );
 }
 
-/** "tuj", "tuj and jekuno", "tuj, jekuno and marcel", "tuj, jekuno and 4 more" — people, in prose. */
+/**
+ * "tuj", "tuj and jekuno", "tuj, jekuno and marcel", "tuj, jekuno and 4 more" — people, in prose.
+ * @param {(string | null | undefined)[] | null | undefined} names
+ * @param {number} [shown]
+ * @returns {string}
+ */
 export function listPhrase(names, shown = 2) {
-  const list = (names ?? []).filter(Boolean);
+  const list = /** @type {string[]} */ ((names ?? []).filter(Boolean));
   if (list.length === 0) return '';
   if (list.length === 1) return list[0];
   if (list.length <= shown + 1) return `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
   return `${list.slice(0, shown).join(', ')} and ${list.length - shown} more`;
 }
 
+/**
+ * @param {number} count
+ * @param {string} noun
+ */
 function plural(count, noun) {
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
+/**
+ * @param {Digest} digest
+ * @param {EditionWindow} window
+ */
 function commitsUrl(digest, window) {
   const branch = encodeURIComponent(digest.commits.branch || 'HEAD');
   return `${digest.url}/commits/${branch}?since=${encodeURIComponent(window.since)}&until=${encodeURIComponent(window.until)}`;
 }
 
-/** GitHub's search takes a date range with times in it; the milliseconds are the one thing it will not. */
+/**
+ * GitHub's search takes a date range with times in it; the milliseconds are the one thing it will not.
+ * @param {string} iso
+ */
 function stamp(iso) {
   return String(iso).replace(/\.\d{3}Z$/, 'Z');
 }
 
-/** GitHub's own list of exactly this — the pull requests merged inside the window, say. */
+/**
+ * GitHub's own list of exactly this — the pull requests merged inside the window, say.
+ * @param {Digest} digest
+ * @param {string} list
+ * @param {string} qualifiers
+ * @param {string} field
+ * @param {EditionWindow} window
+ */
 function searchUrl(digest, list, qualifiers, field, window) {
   const query = `${qualifiers} ${field}:${stamp(window.since)}..${stamp(window.until)}`;
   return `${digest.url}/${list}?q=${encodeURIComponent(query)}`;
 }
 
+/**
+ * @param {IssueLike[] | null | undefined} list
+ * @returns {Chip['items']}
+ */
 function issueItems(list) {
   return (list ?? []).map((item) => ({
     title: item.title || `#${item.number}`,
@@ -349,12 +506,19 @@ function issueItems(list) {
   }));
 }
 
+/** @type {(text: string) => Segment} */
 const plain = (text) => ({ text });
 
 /**
  * A fact the reader can hover or land on: its popover lists every one of `items`, and Enter opens
  * `url`. `more` is the one case the popover cannot be complete — the fetch stopped before the day
  * did — and it then ends with a line pointing at GitHub.
+ * @param {string} text
+ * @param {string} kind
+ * @param {string} url
+ * @param {Chip['items']} items
+ * @param {boolean} [more]
+ * @returns {Segment}
  */
 function chip(text, kind, url, items, more = false) {
   return { text, chip: { kind, url, items, more: Boolean(more) } };
@@ -363,6 +527,11 @@ function chip(text, kind, url, items, more = false) {
 /**
  * "2 pull requests merged, 1 opened and 1 closed without merging." The noun rides on the first
  * part only; the rest are a number and a verb, which is how the sentence would be said aloud.
+ * @param {Segment[]} segments
+ * @param {{ count: number, verb: string, tail?: string, url: string, items: Chip['items'] }[]} parts
+ * @param {string} noun
+ * @param {string} kind
+ * @param {boolean} more
  */
 function clause(segments, parts, noun, kind, more) {
   if (parts.length === 0) return;
@@ -381,8 +550,12 @@ function clause(segments, parts, noun, kind, more) {
  * Every fact in them is a chip: its popover lists everything it is made of, and its link opens
  * GitHub's own list of exactly that, cut to the window. Segments are plain text or a chip, and the
  * menu draws them in order. A quiet day is no segments, and the menu says so.
+ * @param {Digest} digest
+ * @param {EditionWindow} window
+ * @returns {Segment[]}
  */
 export function proseFor(digest, window) {
+  /** @type {Segment[]} */
   const segments = [];
 
   const releases = digest.releases ?? [];
@@ -403,7 +576,7 @@ export function proseFor(digest, window) {
     segments.push(plain('. '));
   }
 
-  const commits = digest.commits ?? {};
+  const commits = digest.commits ?? /** @type {Partial<Digest['commits']>} */ ({});
   if (commits.count > 0) {
     const items = (commits.recent ?? []).map((entry) => ({
       title: entry.message || entry.sha,
@@ -417,7 +590,8 @@ export function proseFor(digest, window) {
     segments.push(plain('. '));
   }
 
-  const pulls = digest.pulls ?? {};
+  const pulls = digest.pulls ?? /** @type {Partial<Digest['pulls']>} */ ({});
+  /** @type {Parameters<typeof clause>[1]} */
   const pullParts = [];
   if (pulls.merged?.length > 0) {
     pullParts.push({ count: pulls.merged.length, verb: 'merged', url: searchUrl(digest, 'pulls', 'is:pr is:merged', 'merged', window), items: issueItems(pulls.merged) });
@@ -430,7 +604,8 @@ export function proseFor(digest, window) {
   }
   clause(segments, pullParts, 'pull request', 'pull', pulls.more);
 
-  const issues = digest.issues ?? {};
+  const issues = digest.issues ?? /** @type {Partial<Digest['issues']>} */ ({});
+  /** @type {Parameters<typeof clause>[1]} */
   const issueParts = [];
   if (issues.opened?.length > 0) {
     issueParts.push({ count: issues.opened.length, verb: 'opened', url: searchUrl(digest, 'issues', 'is:issue', 'created', window), items: issueItems(issues.opened) });
@@ -444,11 +619,16 @@ export function proseFor(digest, window) {
   return segments;
 }
 
-/** The same sentences as one string, for anywhere without chips — the settings page, a tooltip. */
+/**
+ * The same sentences as one string, for anywhere without chips — the settings page, a tooltip.
+ * @param {Segment[] | null | undefined} segments
+ * @returns {string}
+ */
 export function proseText(segments) {
   return (segments ?? []).map((segment) => segment.text).join('');
 }
 
+/** @param {string | null | undefined} token */
 function headers(token) {
   return {
     Accept: 'application/vnd.github+json',
@@ -457,6 +637,10 @@ function headers(token) {
   };
 }
 
+/**
+ * @param {number} status
+ * @param {boolean} anonymous
+ */
 function explain(status, anonymous) {
   if (status === 401) return 'GitHub rejected the token.';
   if (status === 404) return anonymous ? 'Not found — a private repository needs a token that can see it.' : 'Not found, or the token cannot see it.';
@@ -465,9 +649,15 @@ function explain(status, anonymous) {
   return `GitHub returned ${status}.`;
 }
 
+/**
+ * @param {string} path
+ * @param {string | null | undefined} token
+ * @returns {Promise<{ ok: boolean, status: number, body: any }>}
+ */
 async function get(path, token) {
   const response = await fetch(`${API}${path}`, { headers: headers(token) });
-  let body = null;
+  /** @type {any} */
+  let body;
   try {
     body = await response.json();
   } catch {
@@ -479,6 +669,9 @@ async function get(path, token) {
 /**
  * The repository itself: proves the name, canonicalises its case and says which branch is the
  * one that matters. Throws with a sentence the menu and the settings page can show as it is.
+ * @param {string} repo
+ * @param {string | null | undefined} token
+ * @returns {Promise<{ fullName: string, url: string, private: boolean, branch: string, archived: boolean }>}
  */
 export async function lookupRepo(repo, token) {
   const [owner, name] = String(repo).split('/');
@@ -498,8 +691,13 @@ export async function lookupRepo(repo, token) {
  * The window's commits, a page at a time until a page comes back short or the pages run out. A
  * page that fails after the first keeps what the earlier ones brought; the first failing is the
  * answer — an empty repository's 409 among them.
+ * @param {string} base
+ * @param {string} branch
+ * @param {EditionWindow} window
+ * @param {string | null | undefined} token
  */
 async function getCommits(base, branch, window, token) {
+  /** @type {any[]} */
   const all = [];
   for (let page = 1; page <= COMMIT_PAGES; page += 1) {
     const query = `since=${encodeURIComponent(window.since)}&until=${encodeURIComponent(window.until)}&per_page=${COMMIT_PAGE}&page=${page}${branch}`;
@@ -515,7 +713,11 @@ async function getCommits(base, branch, window, token) {
   return { ok: true, status: 200, body: all };
 }
 
-/** The page for pull requests and issues: a day's, or the largest GitHub gives for a longer window. */
+/**
+ * The page for pull requests and issues: a day's, or the largest GitHub gives for a longer window.
+ * @param {EditionWindow} window
+ * @returns {number}
+ */
 export function pageSize(window) {
   const span = Date.parse(window.until) - Date.parse(window.since);
   return span > LONG_WINDOW ? PAGE_LONG : PAGE;
@@ -528,6 +730,10 @@ export function pageSize(window) {
  * same whatever the window covers; a longer one asks for bigger pages, not more of them.
  * Everything is filtered here against the window, because only the commits endpoint takes an
  * `until`.
+ * @param {string} repo
+ * @param {EditionWindow} window
+ * @param {string | null | undefined} token
+ * @returns {Promise<Digest>}
  */
 export async function fetchDigest(repo, window, token) {
   const about = await lookupRepo(repo, token);

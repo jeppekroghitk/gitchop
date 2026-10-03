@@ -1,8 +1,16 @@
 import { tokenLabel } from '../lib/gist.js';
 import { api } from '../lib/links.js';
+import { send } from '../lib/messages.js';
 import { tokenGate, tokenState } from './pages.js';
+import { resumeAfterCache, resumeSignIn, signInBlock, stopSignIn } from './signin.js';
 
-const TOKEN_CLASSIC = 'https://github.com/settings/tokens/new?scopes=repo,gist&description=gitchop';
+/** @import { Answer, Message, MessageType } from '../background/messages.js' */
+
+/**
+ * read:user is what lets a classic token count private contributions; GitHub's schema ties them to
+ * that scope, not to repo.
+ */
+const TOKEN_CLASSIC = 'https://github.com/settings/tokens/new?scopes=repo,gist,read:user&description=gitchop';
 const TOKEN_FINE = 'https://github.com/settings/personal-access-tokens/new';
 /**
  * What GitHub's form is asked to tick: Metadata comes with any repository permission, Pull requests
@@ -28,18 +36,31 @@ function fineTokenUrl(owner) {
   return `${TOKEN_FINE}?${params}`;
 }
 
-const tokenHost = document.getElementById('sync');
-const backupHost = document.getElementById('backup');
+const tokenHost = /** @type {HTMLElement} */ (document.getElementById('sync'));
+const backupHost = /** @type {HTMLElement} */ (document.getElementById('backup'));
 /** Under each card: the cautions, the fine print, and what the backup would take. */
-const tokenNotes = document.getElementById('token-notes');
-const backupNotes = document.getElementById('backup-notes');
+const tokenNotes = /** @type {HTMLElement} */ (document.getElementById('token-notes'));
+const backupNotes = /** @type {HTMLElement} */ (document.getElementById('backup-notes'));
 
 let busy = false;
+/** @type {Answer<'gitchop:sync:state'> | null} */
 let current = null;
 let onTokenChange = () => {};
+/** Whether the personal access token disclosure is open, kept across the card's redraws. */
+let advancedOpen = false;
+/**
+ * Fills the recipe's owner, from the sign-in block's "add a token for @org". Set as the card draws.
+ * @type {(owner: string) => void}
+ */
+let prefillOwner = () => {};
+let resumed = false;
 
-/** Each card has its own status corner, so a saved token and a pushed gist do not fight over one. */
+/**
+ * Each card has its own status corner, so a saved token and a pushed gist do not fight over one.
+ * @param {HTMLElement} node
+ */
 function flasher(node) {
+  /** @type {number | null} */
   let timer = null;
   return (text) => {
     node.textContent = text;
@@ -52,8 +73,8 @@ function flasher(node) {
 }
 
 const flash = {
-  token: flasher(document.getElementById('sync-status')),
-  backup: flasher(document.getElementById('backup-status')),
+  token: flasher(/** @type {HTMLElement} */ (document.getElementById('sync-status'))),
+  backup: flasher(/** @type {HTMLElement} */ (document.getElementById('backup-status'))),
 };
 
 /**
@@ -71,8 +92,13 @@ async function consent(types) {
   }
 }
 
+/**
+ * @template {MessageType} T
+ * @param {Message<T>} message
+ * @returns {Promise<Answer<T>>}
+ */
 async function ask(message) {
-  const response = await api.runtime.sendMessage(message);
+  const response = await send(message);
   if (!response?.ok) throw new Error(response?.error ?? 'The background script did not answer.');
   return response;
 }
@@ -101,6 +127,13 @@ function link(text, href) {
   node.href = href;
   node.target = '_blank';
   node.rel = 'noreferrer';
+  return node;
+}
+
+/** The sign-in card's quieter link, as the sign-in block draws its own. */
+function quietLink(text, href) {
+  const node = link(text, href);
+  node.className = 'quiet';
   return node;
 }
 
@@ -142,55 +175,60 @@ async function guard(node, card, work) {
   }
 }
 
-function step(lead, ...controls) {
-  const item = element('li');
-  const box = element('div', 'step');
-  const row = element('div', 'step-row');
-  row.append(element('b', null, lead), ...controls);
-  box.append(row);
-  item.append(box);
-  return { item, box };
+/**
+ * One part of the token form: a plain title, the controls, and a line on what to know.
+ * @param {string} title
+ * @param {Node[]} controls
+ * @param {HTMLElement} [note]
+ */
+function part(title, controls, note) {
+  const box = element('div', 'pat-part');
+  const head = element('span', 'pat-title', title);
+  const row = element('div', 'pat-row');
+  row.append(...controls);
+  box.append(head, row);
+  if (note) box.append(note);
+  return box;
 }
 
 function hint(text) {
-  return element('p', 'step-hint', text);
+  return element('p', 'pat-hint', text);
 }
 
 /**
  * The way to a fine-grained token, in the order it happens: name the owner, open GitHub's form for
- * that owner, paste what comes back. The link follows the owner typed in the first step, and the form
- * it opens arrives with the permissions gitchop needs already ticked for that owner — blank is the
- * account itself, whose token also carries the backup's gist. Saving is the third step, so the whole
- * thing reads top to bottom.
+ * that owner, paste what comes back. The link follows the owner typed first, and the form it opens
+ * arrives with the permissions gitchop needs already ticked for that owner — blank is the account
+ * itself, whose token also carries the backup's gist. Saving comes last, so the whole thing reads top
+ * to bottom.
  */
-function fineSteps({ placeholder, saveLabel, primary }) {
-  const list = element('ol', 'steps');
+function fineForm() {
+  const form = element('div', 'pat-form');
 
   const owner = textInput({ placeholder: 'organisation, exact name', label: 'Owner of the fine-grained token' });
   owner.className = 'owner';
-  const one = step('Owner', owner);
-  one.box.append(
-    hint(
-      'Type the exact name of your organisation, as it appears in github.com/‹name›. Leave it blank ' +
-        'for a token on your own account.',
-    ),
+  const one = part(
+    'Who it is for',
+    [owner],
+    hint('The exact name of the organisation, as in github.com/‹name›. Leave it blank for a token on your own account.'),
   );
 
-  const anchor = link('', '');
-  const two = step('Create', anchor);
+  const anchor = element('a', 'btn btn-edge');
+  anchor.target = '_blank';
+  anchor.rel = 'noreferrer';
   const ticked = hint('');
-  two.box.append(ticked);
+  const two = part('Create it on GitHub', [anchor], ticked);
 
-  const token = textInput({ password: true, placeholder, label: 'GitHub token' });
-  const save = button(saveLabel, { primary });
+  const token = textInput({ password: true, placeholder: 'github_pat_…', label: 'GitHub token' });
+  const save = button('Save token', { primary: true });
   save.addEventListener('click', () =>
     guard(save, 'token', async (flash) => {
       if (!(await consent(['authenticationInfo']))) {
         flash('not allowed');
         return;
       }
-      // The owner named in the first step travels with the token: it is what the row is called
-      // until the token lists a private repository that says otherwise.
+      // The owner named first travels with the token: it is what the row is called until the
+      // token lists a private repository that says otherwise.
       const result = await ask({ type: 'gitchop:token:save', token: token.value, owner: ownerName(owner.value) });
       flash('saved');
       current = result;
@@ -198,31 +236,27 @@ function fineSteps({ placeholder, saveLabel, primary }) {
       onTokenChange();
     }),
   );
-  const three = step('Paste', token, save);
-  three.box.append(hint('A fine-grained token reaches one owner. Add another for each organisation.'));
+  const three = part('Paste it here', [token, save], hint('Add another token for each organisation.'));
 
   const follow = () => {
     const target = ownerName(owner.value);
     anchor.href = fineTokenUrl(target);
-    anchor.textContent = target ? `Open GitHub’s form for @${target} →` : 'Open GitHub’s form for your own account →';
-    ticked.textContent =
-      (target
-        ? `The form opens for @${target} with the permissions gitchop needs already ticked: Pull requests, Issues and Contents, read-only. `
-        : 'The form opens for your account with the permissions gitchop needs already ticked: Pull requests, Issues and Contents, read-only, and Gists for the backup. ') +
-      'You only choose the repositories and an expiration. Leave the owner as it is: changing it on the form clears the ticks.';
+    anchor.textContent = target ? `Open GitHub’s form for @${target}` : 'Open GitHub’s form';
+    ticked.textContent = target
+      ? `It opens for @${target} with Pull requests, Issues and Contents ticked, read-only. Pick the repositories and an expiry, and leave the owner as it is: changing it there clears the ticks.`
+      : 'It opens for your account with Pull requests, Issues and Contents ticked, read-only, and Gists for the backup. Pick the repositories and an expiry, and leave the owner as it is.';
   };
   owner.addEventListener('input', follow);
   follow();
 
-  list.append(one.item, two.item, three.item);
-  return list;
-}
-
-function recipeHead(title, tag) {
-  const head = element('div', 'recipe-head');
-  head.append(element('span', null, title));
-  if (tag) head.append(element('span', 'recipe-tag', tag));
-  return head;
+  form.append(hint('A fine-grained, read-only token reaches one owner: your account or one organisation.'), one, two, three);
+  /** @param {string} name */
+  const prefill = (name) => {
+    owner.value = name;
+    follow();
+    owner.focus();
+  };
+  return { form, prefill };
 }
 
 /**
@@ -230,17 +264,23 @@ function recipeHead(title, tag) {
  * warned against rather than offered: repo is write everywhere the account reaches.
  */
 function classicCaution() {
-  const box = element('div', 'caution');
+  const box = element('div', 'caution caution-quiet');
   box.append(
     element('b', null, 'Avoid classic tokens'),
     element(
       'p',
       null,
-      'A classic token cannot be read-only. The repo scope it needs also grants write access to every ' +
-        'repository your account can reach, in every organisation you belong to, and gitchop only ever ' +
-        'reads. Use one only if your organisation does not allow fine-grained tokens.',
+      'A classic token cannot be read-only: its repo scope can write to every repository your account ' +
+        'reaches, and gitchop only ever reads. Make one only if your organisation allows neither the ' +
+        'app nor fine-grained tokens.',
     ),
-    link('Classic token anyway, repo + gist →', TOKEN_CLASSIC),
+    element(
+      'p',
+      'caution-aside',
+      'Signing in and fine-grained tokens count only the private contributions they can see; a classic ' +
+        'token with read:user counts them all.',
+    ),
+    quietLink('Make a classic token anyway', TOKEN_CLASSIC),
   );
   return box;
 }
@@ -253,36 +293,80 @@ function fineprint() {
       'p',
       null,
       'Tokens are stored outside synced storage, obfuscated rather than left as readable text, only ' +
-        'ever sent to api.github.com, and never handed to a web page. Each is used for five calls and ' +
-        'no others: who the account is, which repositories it can see, which open pull requests are ' +
-        'yours or want your review, what happened lately in the repositories you subscribe to, and ' +
-        'reading and writing the one gist. Obfuscation is not encryption — anyone with access to this ' +
-        'profile can still recover them — but a token no longer sits in the profile as searchable text.',
+        'ever sent to api.github.com, and never handed to a web page. They are used for these calls and ' +
+        'no others: who the account is, which repositories it can see, searching repositories, which ' +
+        'open pull requests are yours or want your review, what happened lately in the repositories you ' +
+        'subscribe to, your contributions count, where gitchop’s app is installed, and reading and ' +
+        'writing the one gist. Obfuscation is not encryption — anyone with access to this profile can ' +
+        'still recover them — but a token no longer sits in the profile as searchable text.',
+    ),
+    element(
+      'p',
+      null,
+      'Signing in talks to github.com/login/device/code and github.com/login/oauth/access_token, from ' +
+        'the background only. A sign-in keeps a renewal token, sealed the same way, which goes only to ' +
+        'github.com/login/oauth/access_token, every eight hours or so, for a fresh token. There is no ' +
+        'client secret anywhere in gitchop.',
     ),
   );
   return box;
 }
 
 /**
- * The same recipe whether or not a token is saved yet, and always at the top of the card: a second
- * organisation is the same three steps again, and what gets pasted lands in the list right beneath.
+ * The same form whether or not a token is saved yet: a second organisation is the same three parts
+ * again, and what gets pasted lands in the list above. The owner can be filled from outside, so the
+ * sign-in's "use a token instead" for an organisation lands on the right form.
  */
 function recipe() {
   const wrap = element('div', 'recipe');
-  wrap.append(
-    recipeHead('Fine-grained token', 'recommended'),
-    fineSteps({ placeholder: 'github_pat_…', saveLabel: 'Save token', primary: true }),
-  );
-  return wrap;
+  const { form, prefill } = fineForm();
+  wrap.append(form);
+  return { node: wrap, prefill };
 }
 
-function noToken(error) {
-  const wrap = element('div', 'card-body');
-  wrap.append(recipe());
-  if (error) wrap.append(element('p', 'error', error));
-  tokenNotes.append(classicCaution(), fineprint());
-  return wrap;
+/**
+ * Personal access tokens, behind a disclosure: signing in covers the common case, and these are
+ * for what it does not — an organisation that will not install the app, or private contributions.
+ * Closed until opened, and open across redraws once it has been.
+ */
+/**
+ * @param {boolean} hasTokens whether anything works already — a sign-in or a saved token — so a
+ *   token is one more, not the other way
+ */
+function advanced(hasTokens) {
+  const box = element('details', 'advanced');
+  box.open = advancedOpen;
+  box.addEventListener('toggle', () => {
+    advancedOpen = box.open;
+  });
+  const { node, prefill } = recipe();
+  box.append(element('summary', null, hasTokens ? 'Add a personal access token' : 'Use a personal access token instead'), node, classicCaution());
+  prefillOwner = (owner) => {
+    advancedOpen = true;
+    box.open = true;
+    prefill(owner);
+  };
+  return box;
 }
+
+/** How the sign-in block reaches back into the card. */
+const signInHooks = {
+  ask,
+  guard,
+  flash: (text) => flash.token(text),
+  rerender: (sync) => {
+    current = sync;
+    render(sync);
+    onTokenChange();
+  },
+  openAdvanced: (owner) => {
+    if (owner) prefillOwner(owner);
+    else {
+      advancedOpen = true;
+      render(current);
+    }
+  },
+};
 
 /**
  * What a token has been given, and where: the scopes of a classic token, so an over-broad one cannot
@@ -322,9 +406,9 @@ function expiry(iso) {
   return `expires ${new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
 }
 
-function tokenList(sync) {
+function tokenList(entries) {
   const wrap = element('div', 'tokens');
-  for (const entry of sync.tokens) {
+  for (const entry of entries) {
     const row = element('div', 'token');
 
     const label = element('div', 'token-name');
@@ -332,7 +416,9 @@ function tokenList(sync) {
     if (entry.broad) label.append(element('span', 'token-warn', 'writes'));
     if (isExpired(entry)) label.append(element('span', 'token-warn', 'expired'));
 
-    const drop = button('Remove');
+    const drop = element('button', 'quiet', 'Remove');
+    drop.type = 'button';
+    drop.setAttribute('aria-label', `Remove the token ${tokenLabel(entry)}`);
     drop.addEventListener('click', () =>
       guard(drop, 'token', async (flash) => {
         const result = await ask({ type: 'gitchop:token:remove', id: entry.id });
@@ -362,21 +448,30 @@ function broadWarning(sync) {
       'p',
       null,
       `Marked "writes": ${scopes}. This token can write to every repository the account can reach, in ` +
-        'every organisation, and gitchop never uses that. Replace it with a fine-grained token from the ' +
-        'steps above and revoke it on GitHub. If it has to stay, keep an expiry on it.',
+        'every organisation, and gitchop never uses that. Sign in with GitHub, or replace it with a ' +
+        'fine-grained token, and revoke it on GitHub. If it has to stay, keep an expiry on it.',
     ),
   );
   return box;
 }
 
-/** The recipe first, then what it has produced so far; the warning about any classic row goes under the box. */
+/**
+ * Signing in first, then the personal access tokens already saved, then the way to another; the
+ * warning about any classic row and the fine print go under the box. The sign-in block draws itself
+ * from the same state, plus a flow in progress it keeps across redraws.
+ */
 function tokenCard(sync, error) {
   const wrap = element('div', 'card-body');
-  const saved = element('div', 'recipe');
-  saved.append(recipeHead('Saved tokens'), tokenList(sync));
-  wrap.append(recipe(), saved);
+  wrap.append(signInBlock(sync, signInHooks));
+  const pats = (sync?.tokens ?? []).filter((entry) => entry.kind !== 'app');
+  if (pats.length > 0) {
+    const saved = element('div', 'saved');
+    saved.append(element('h3', 'saved-title', pats.length === 1 ? 'Saved token' : 'Saved tokens'), tokenList(pats));
+    wrap.append(saved);
+  }
+  wrap.append(advanced(pats.length > 0 || Boolean(sync?.tokens.some((entry) => entry.kind === 'app' && !entry.needsSignIn))));
   if (error) wrap.append(element('p', 'error', error));
-  const warn = broadWarning(sync);
+  const warn = sync ? broadWarning(sync) : null;
   if (warn) tokenNotes.append(warn);
   tokenNotes.append(fineprint());
   return wrap;
@@ -398,8 +493,9 @@ function backupNeedsToken() {
     element(
       'p',
       'note',
-      'Needs a token under Tokens: a fine-grained one for your own account, made with the owner left ' +
-        'blank, or a classic one with gist. gitchop uses whichever saved token can write the gist.',
+      'Needs a sign-in or a token under Sign-in. Signing in with GitHub covers the backup, as does a ' +
+        'fine-grained token for your own account, made with the owner left blank, or a classic one with ' +
+        'gist. gitchop uses whichever can write the gist.',
     ),
   );
   return tokenGate();
@@ -505,7 +601,7 @@ function render(sync, error, card = 'token') {
 
   tokenHost.textContent = '';
   tokenNotes.textContent = '';
-  tokenHost.append(sync?.hasToken ? tokenCard(sync, tokenError) : noToken(tokenError));
+  tokenHost.append(tokenCard(sync, tokenError));
 
   backupHost.textContent = '';
   backupNotes.textContent = '';
@@ -520,12 +616,24 @@ export async function load() {
     render(current);
   } catch (error) {
     render(current, String(error.message ?? error));
+    return;
+  }
+  if (!resumed) {
+    resumed = true;
+    resumeSignIn(current, signInHooks);
   }
 }
 
 /** Saving a link marks the config dirty in the background; reflect that without a reload. */
 export function watch(afterTokenChange) {
   if (afterTokenChange) onTokenChange = afterTokenChange;
+  // The background's alarm finishes a sign-in left waiting; this page stops asking as it goes.
+  window.addEventListener('pagehide', () => stopSignIn());
+  // Back from the back-forward cache, the page is as it was left but no longer asking, so a code
+  // still on screen is asked about again.
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) resumeAfterCache();
+  });
   api.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.sync) load();
   });

@@ -444,8 +444,8 @@
       // harness's browser object, so it shares one store and one background with the menu — a slider
       // moved there shapes the next chop here, a token removed there takes the pull requests out of
       // the menu. Its ES modules will not load from file://, which is what `node dev/serve.mjs` is
-      // for; ?settings opens it on load. Once made, the frame is hidden rather than torn down, so the
-      // listeners it registered stay valid.
+      // for — the server also makes the stage its Preview plays; ?settings opens it on load. Once
+      // made, the frame is hidden rather than torn down, so the listeners it registered stay valid.
       const SERVED = location.protocol === 'http:' || location.protocol === 'https:';
       let manifest = { name: 'gitchop for GitHub', version: 'harness' };
       let frame = null;
@@ -513,6 +513,8 @@
         rateLeft[key] = Math.max(0, rateLeft[key] - points);
         notify({ rateCache: { newValue: { ...rateLeft } } }, 'local');
       }
+      let welcomed = false;
+      let consented = false;
       window.browser = window.chrome = {
         runtime: {
           lastError: undefined,
@@ -521,6 +523,29 @@
             document.getElementById('state').textContent = `msg: ${message.type}`;
             if (message.type === 'gitchop:options') {
               openSettings();
+              return { ok: true };
+            }
+            // ?welcome=first: a profile that has not been welcomed, so the first press shows the welcome.
+            if (message.type === 'gitchop:welcome') return { ok: true, first: params.get('welcome') === 'first' && sync.tokens.length === 0 && !welcomed, hint: sync.tokens.length === 0 && !store.hintDismissed };
+            // The page opened at the browser's question: here it answers yes at once, so the
+            // overlay finds access granted when the harness tab is shown again.
+            if (message.type === 'gitchop:welcome:open') {
+              if (message.at === 'consent') consented = true;
+              return { ok: true };
+            }
+            if (message.type === 'gitchop:welcome:done') {
+              welcomed = true;
+              notify({ welcomed: { newValue: true } }, 'local');
+              return { ok: true };
+            }
+            // ?access=elsewhere: a Firefox without the consent to hold a token yet.
+            if (message.type === 'gitchop:signin:access') return { ok: true, granted: params.get('access') !== 'elsewhere' || consented };
+            // The device flow, never reaching GitHub: a code that stays pending until it runs out.
+            if (message.type === 'gitchop:signin:pending') return { ok: true, code: null };
+            if (message.type === 'gitchop:signin:start') return { ok: true, userCode: 'WDJB-MJHT', verificationUri: 'https://github.com/login/device', expiresAt: new Date(Date.now() + 900000).toISOString(), interval: 5 };
+            if (message.type === 'gitchop:signin:poll') return { ok: true, status: 'pending', interval: 5, error: null, state: null };
+            if (message.type === 'gitchop:welcome:hint:dismiss') {
+              store.hintDismissed = true;
               return { ok: true };
             }
             if (message.type === 'gitchop:panel') return { ok: true, settings: { ...store.panel }, show: store.panel.enabled === 1 };
@@ -602,6 +627,9 @@
           },
         },
         storage: {
+          local: {
+            get: async () => (welcomed ? { welcomed: true } : {}),
+          },
           sync: {
             get: async () => JSON.parse(JSON.stringify(store)),
             // Notifies like the real API, so the content script's effects cache follows the settings page.
@@ -650,13 +678,12 @@
 
       if (params.has('settings')) openSettings();
     </script>
-    <script src="../src/content/context.js"></script>
-    <script src="../src/content/effects.js"></script>
-    <script src="../src/content/styles.js"></script>
-    <script src="../src/content/chop.js"></script>
-    <script src="../src/content/odometer.js"></script>
-    <script src="../src/content/menu.js"></script>
-    <script src="../src/content/main.js"></script>
+    <!--
+      The content script as a package carries it: one bundle. dev/serve.mjs makes it from
+      src/content on every request; from file:// it is the git-ignored copy that `node dev/bundle.mjs`
+      and every build write next to this page, so a still taken that way runs the last build.
+    -->
+    <script src="content.js" onerror="document.getElementById('state').textContent = 'no menu yet: node dev/bundle.mjs, or node dev/serve.mjs'"></script>
     <script>
       // harness.html?autochop&colour=210&epicness=90 chops on load, so a reload replays the effect.
       if (params.has('autochop')) document.getElementById('chop').click();

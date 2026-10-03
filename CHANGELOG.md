@@ -3,6 +3,75 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
+## Unreleased
+
+- A welcome for new users, shown the first time you press <kbd>.</kbd> on GitHub: the chop plays,
+  and the welcome takes the menu's place in the overlay — what signing in unlocks, **Sign in with
+  GitHub** carried out right there (the code, GitHub's device page in a new tab, the organisations to
+  install the app on), and **Continue without signing in**, which drops straight into the menu.
+  Once put aside that way, or signed in, it never shows again; Escape or the ✕ in the corner only
+  close it, and the next press greets again. Nothing opens on
+  install. The same welcome, drawn by the same code, has a page of its own: the toolbar button opens
+  it instead of Settings until you sign in, save a token or put it aside. While nothing is signed in,
+  the menu ends in a quiet *Sign in to search your private repositories* row, with a ✕ to hide it;
+  it starts the sign-in in the overlay. On Firefox, until the consent to hold a token has been given,
+  **Sign in with GitHub** opens a gitchop tab at that question alone; once it is answered the tab
+  closes itself and the sign-in carries on in the overlay. The steps, numbered, head each screen. Escape or closing it
+  calls off a code on screen. Updating from 2.9 or
+  older counts as welcomed, as does a first sign-in or token, so the welcome never replaces a menu
+  someone already uses.
+- Sign in with GitHub ([#17](https://github.com/jeppekroghitk/gitchop/issues/17)). Settings shows a
+  short code to approve at github.com/login/device, and gitchop is signed in through its own GitHub
+  App, *gitchop for GitHub*: read-only on repositories, Gists for the backup, and only where the app
+  is installed. The card lists where it is, offers **Install on @org** for the owners in your links
+  that have neither the app nor a token, and says plainly that those owners are public-only until
+  they do; owners a saved token already reaches are listed as covered by it.
+  The sign-in renews itself — one renewal at a time, stored before it is used, since GitHub's
+  renewal tokens work once — and a renewal GitHub refuses marks it *signed out* rather than deleting
+  it. Until you sign in again it counts as no token, so the pull request column, the badge and the
+  contributions go away rather than freeze at their last answer. There is no client secret anywhere.
+  Personal access tokens stay, under **Advanced** on the same card, and work beside a sign-in: a
+  search, a news repository and the gist each go with the token that reaches them. The Tokens page is now called Sign-in.
+- With tokens alone, too, a search and the news choose a token by what it reaches rather than by
+  which was saved first: a search goes with the token that sees the most of what it names — a classic
+  token if there is one, and a sign-in before a fine-grained token only where the app is installed on
+  all of that owner's repositories — while a news repository tries the narrowest token that reaches
+  its owner first, and the next on a 404.
+  Before, both went in the order the tokens were saved.
+- Writes of the configuration take turns. Building the index wrote back the whole token list it had
+  read minutes earlier; with a token that renews itself, that would have put back a spent one.
+- The classic token link asks for `read:user` as well as `repo` and `gist`, since that is the scope
+  GitHub counts private contributions under, and the contributions error says so instead of naming
+  `repo`.
+
+The rest changes nothing in the menu, the chop or Settings; it is the inside rearranged, so that the
+next change is easier to make and harder to get wrong.
+
+- The content script is written as ES modules and bundled. Content scripts named in the manifest
+  load as classic scripts in both browsers, so the content code could not import anything and leaned
+  on load order and globals shared between files. Now each module says what it depends on, and
+  [esbuild](https://esbuild.github.io) joins them into the one `content.js` each package carries —
+  not minified and with no source maps, so a reviewer reads the sources joined up. The settings
+  page's preview stage is bundled the same way. The repository root is no longer an extension on its
+  own; build and load `dist/<browser>`.
+- The background is a module per feature. Tokens, the gist, the pull requests, the news, the
+  contributions, the rate gauge and the message router had grown into one file sharing one scope;
+  each now stands on its own under `src/background/`, with `index.js` adding every listener on the
+  first pass, as an event page or a service worker woken by an event needs.
+- The menu is a module per part. The shell, the rows, search, the keyboard, the motion, the news
+  and pull request columns and the gauge each live under `src/content/menu/`, and `menu.js` only
+  wires them together. The rows' arithmetic sits in a module that touches nothing of the page, so
+  the tests import it under plain node.
+- The JavaScript is type-checked. It stays plain JavaScript that the browsers and esbuild run as it
+  is; TypeScript reads only its JSDoc, which is where a message the background has no handler for,
+  or one missing a field its handler reads, is now caught — before, either was a silent no-op.
+- The tests run under node's own test runner, a named test per behaviour, and `npm test` finds
+  every one, so CI and the release no longer keep a list of files that had already fallen out of
+  step. ESLint's recommended rules run over everything, each directory held to the globals of where
+  it runs — the background and `src/lib/` to a service worker's, so a reach for the page from there
+  is caught before Chrome finds it. CI and the release lint, type-check, test and build, in that
+  order.
+
 ## 2.9.0
 
 - The pull requests are asked for on every open, and what left is seen to leave. The column

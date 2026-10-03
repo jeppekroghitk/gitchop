@@ -1,6 +1,3 @@
-window.__gitchop = window.__gitchop || {};
-
-window.__gitchop.CSS = `
 :host {
   color-scheme: dark;
   font: 400 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -124,12 +121,6 @@ window.__gitchop.CSS = `
   filter: blur(14px);
 }
 
-/*
- * The stage is the slab the chop raises: the panel alone, or the panel with the news on its left
- * and the pull requests on its right. Every column stretches to the same height, so their bottoms
- * align whatever is in them. The widths are what the columns want; a viewport just short of them
- * squeezes all three a little before one has to go.
- */
 .gc-stage {
   display: flex;
   align-items: stretch;
@@ -171,7 +162,6 @@ window.__gitchop.CSS = `
   flex: 0 1 440px;
 }
 
-/* In the tree whenever the news is on; in the layout only while something is subscribed. */
 .gc-news {
   flex: 0 1 400px;
   display: none;
@@ -181,7 +171,6 @@ window.__gitchop.CSS = `
   display: flex;
 }
 
-/* Three columns need this much; below it the news steps out first, being the newer arrival. */
 @media (max-width: 1279px) {
   .gc-stage[data-pulls="true"] .gc-news {
     display: none;
@@ -192,7 +181,6 @@ window.__gitchop.CSS = `
   }
 }
 
-/* Below this there is no room beside the panel at all; the menu is exactly what it was. */
 @media (max-width: 979px) {
   .gc-pulls,
   .gc-stage[data-news="true"] .gc-news {
@@ -206,11 +194,6 @@ window.__gitchop.CSS = `
   }
 }
 
-/*
- * The panel switched off in Settings: the columns stand on their own, at their own widths, and no
- * rule about room beside the panel applies — there is no panel to be beside. The stage holds the
- * keys then, so it may be focused, quietly.
- */
 .gc-stage[data-panel="false"] {
   width: min(440px, 100%);
 }
@@ -258,7 +241,6 @@ window.__gitchop.CSS = `
   outline: none;
 }
 
-/* In a column's head the count sits by the title; the news keeps its own right-hand fact. */
 .gc-news .gc-count {
   margin-left: 0;
 }
@@ -290,15 +272,6 @@ window.__gitchop.CSS = `
   color: var(--gc-heading);
 }
 
-/*
- * The year's contributions, in the head beside the title, as the profile prints them. Each digit
- * is a reel: a strip of glyphs sliding behind a window one digit tall, so a change rolls rather
- * than blinks and the first paint spins in like a slot machine's once the panel is on screen, every
- * reel turning at once and stopping in turn, the first at once and each next one a beat later. The strip
- * moves by a percentage of its own height, so the digit's size is written once, here, and the
- * head stays exactly as tall as its title. It is not a link: hovering it hangs the years before
- * this one beneath, and that is all.
- */
 .gc-count {
   margin-left: auto;
   align-self: center;
@@ -325,7 +298,6 @@ window.__gitchop.CSS = `
   overflow: hidden;
 }
 
-/* The script times each reel's roll, so they spin together and stop one at a time. */
 .gc-odo-reel {
   display: block;
   transition: transform var(--gc-odo-roll, 600ms) var(--gc-odo-ease, cubic-bezier(0.2, 0.7, 0.15, 1));
@@ -350,12 +322,10 @@ window.__gitchop.CSS = `
   color: var(--gc-dim);
 }
 
-/* Taken down when there is no number to show; the class above would otherwise outrank the attribute. */
 .gc-count[hidden] {
   display: none;
 }
 
-/* Lit while the mouse is on it, since the years before this one hang under it then. */
 .gc-count:hover .gc-count-label {
   color: var(--gc-text);
 }
@@ -427,7 +397,6 @@ window.__gitchop.CSS = `
   cursor: default;
 }
 
-/* A column without the cursor keeps its place marked, but quietly. */
 .gc-stage:not([data-region="panel"]) .gc-panel .gc-item[data-active="true"],
 .gc-stage:not([data-region="pulls"]) .gc-pulls .gc-item[data-active="true"] {
   background: transparent;
@@ -490,6 +459,47 @@ window.__gitchop.CSS = `
 
 .gc-item[data-active="true"] .gc-tail {
   opacity: 1;
+}
+
+.gc-item[data-hint="true"] {
+  margin-top: 6px;
+  border-top: 1px solid var(--gc-line);
+  padding-top: 9px;
+  color: var(--gc-dim);
+}
+
+.gc-item[data-hint="true"] .gc-label {
+  font-size: 12.5px;
+}
+
+.gc-item[data-hint="true"] .gc-icon {
+  filter: grayscale(1);
+  opacity: 0.7;
+}
+
+.gc-item[data-hint="true"][data-active="true"] .gc-icon {
+  opacity: 1;
+}
+
+.gc-item[data-hint="true"][data-active="true"] {
+  color: var(--gc-text);
+}
+
+.gc-hint-close {
+  border: 0;
+  background: transparent;
+  color: var(--gc-dim);
+  font: 400 11px/1 var(--gc-mono);
+  padding: 3px 4px;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.gc-hint-close:hover,
+.gc-hint-close:focus-visible {
+  color: var(--gc-text);
+  opacity: 1;
+  outline: none;
 }
 
 .gc-reason {
@@ -731,7 +741,6 @@ window.__gitchop.CSS = `
   justify-content: flex-end;
 }
 
-/* Pull requests: lanes of two-line rows; skeletons hold the slots until the snapshot lands. */
 .gc-lanes {
   height: auto;
   flex: 1 1 0;
@@ -757,10 +766,6 @@ window.__gitchop.CSS = `
   background: var(--gc-line);
 }
 
-/*
- * One line: the title, the repository, and how long since it moved. No tail — the age is the last
- * thing on the row, and ends where the lane's divider does.
- */
 .gc-pr {
   grid-template-columns: 18px minmax(0, 1fr) minmax(0, 36%) auto;
   min-height: var(--gc-pr-row);
@@ -790,11 +795,6 @@ window.__gitchop.CSS = `
   color: var(--gc-dim);
 }
 
-/*
- * The full title of a row that had to cut it short, under the row it belongs to. It settles into
- * place — a short fade and a few pixels of travel toward the row — rather than snapping; the
- * timing is quick enough to read as instant. The script sets left, top and max-width per row.
- */
 .gc-pop {
   position: absolute;
   z-index: 1;
@@ -865,10 +865,6 @@ window.__gitchop.CSS = `
   color: #ffb3a8;
 }
 
-/*
- * News: one section per repository, rows of a glyph, a title and a tail word. The header carries
- * the one fact the whole column shares — what it covers — where the panel's head has its title.
- */
 .gc-since {
   margin-left: auto;
   min-width: 0;
@@ -888,10 +884,6 @@ window.__gitchop.CSS = `
   white-space: nowrap;
 }
 
-/*
- * One repository is a few sentences, and every fact in them is a chip: the thing the mouse hovers
- * and clicks. The words between are dimmer, so the facts read first.
- */
 .gc-prose-row {
   padding: 2px 15px 9px 13px;
 }
@@ -911,7 +903,6 @@ window.__gitchop.CSS = `
   white-space: nowrap;
 }
 
-/* Lit while hovered, and while its popover is the one that is up. */
 .gc-chip:hover,
 .gc-chip[data-open="true"] {
   background: rgba(255, 255, 255, 0.07);
@@ -919,14 +910,6 @@ window.__gitchop.CSS = `
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.07);
 }
 
-/*
- * What a fact is made of: a list under its sentence, one line per pull request, commit or
- * release, each a link — every one of them, scrolling inside the card past about twenty (the
- * script sets the height). The outer element is the bridge: transparent, sitting flush under the
- * chip's line, its padding the visible gap, so the mouse crossing the gap is still in the popover
- * and not on the next line's chips. It takes the pointer only while shown, or an invisible sheet
- * would sit over the prose.
- */
 .gc-pop--list {
   padding: 6px 0 0;
   background: none;
@@ -993,13 +976,6 @@ a.gc-pop-item:hover {
   color: var(--gc-dim);
 }
 
-/*
- * The years before this one, under the number in the head and right edge to right edge with it:
- * the news popover's card and rows, a year where the title goes and its total where the detail
- * goes — spaced as the reels space theirs, and in the text colour, since here the figure is the
- * point. It hangs from the same bridge but takes no pointer: there is nothing in it to click, so it
- * is a tooltip that goes when the mouse leaves the number. The script sets right and top.
- */
 .gc-pop--years[data-shown="true"] {
   pointer-events: none;
 }
@@ -1008,4 +984,3 @@ a.gc-pop-item:hover {
   font-size: 11px;
   color: var(--gc-text);
 }
-`;

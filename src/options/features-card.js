@@ -1,29 +1,44 @@
-import { PANEL_SWITCHES as PANEL, api } from '../lib/links.js';
+import { PANEL_SWITCHES as PANEL } from '../lib/links.js';
+import { send } from '../lib/messages.js';
 import { SWITCHES as PULLS } from '../lib/pulls.js';
 import { SWITCHES as NEWS } from '../lib/news.js';
 import { SWITCHES as CONTRIBUTIONS } from '../lib/contributions.js';
 import { load as loadPulls } from './pulls-card.js';
 
-const host = document.getElementById('features');
-const statusEl = document.getElementById('features-status');
+/** @import { Answer, Message, MessageType } from '../background/messages.js' */
+
+const host = /** @type {HTMLElement} */ (document.getElementById('features'));
+const statusEl = /** @type {HTMLElement} */ (document.getElementById('features-status'));
 /** Under the card: what is worth knowing about the switches as they stand. */
-const notes = document.getElementById('features-notes');
+const notes = /** @type {HTMLElement} */ (document.getElementById('features-notes'));
+
+/** @typedef {{ id: string, label: string, hint: string }} Spec */
 
 /**
  * One row per thing the menu shows besides the links. Each switch is the `enabled` setting of its
  * own feature, kept where that feature keeps the rest of its settings, so flipping it here is the
  * same as it ever was; only the switch has moved. `after` is a page that draws itself differently
  * once its feature is off, and redraws; the news page follows storage on its own.
+ * @type {{
+ *   id: string,
+ *   spec: Spec,
+ *   ask: 'gitchop:panel' | 'gitchop:pulls' | 'gitchop:news' | 'gitchop:contributions',
+ *   set: 'gitchop:panel:settings' | 'gitchop:pulls:settings' | 'gitchop:news:settings' | 'gitchop:contributions:settings',
+ *   needsToken: boolean,
+ *   after?: () => void,
+ * }[]}
  */
 const FEATURES = [
-  { id: 'panel', spec: PANEL.find((spec) => spec.id === 'enabled'), ask: 'gitchop:panel', set: 'gitchop:panel:settings', needsToken: false },
-  { id: 'pulls', spec: PULLS.find((spec) => spec.id === 'enabled'), ask: 'gitchop:pulls', set: 'gitchop:pulls:settings', needsToken: true, after: loadPulls },
-  { id: 'news', spec: NEWS.find((spec) => spec.id === 'enabled'), ask: 'gitchop:news', set: 'gitchop:news:settings', needsToken: false },
-  { id: 'contributions', spec: CONTRIBUTIONS.find((spec) => spec.id === 'enabled'), ask: 'gitchop:contributions', set: 'gitchop:contributions:settings', needsToken: true },
+  { id: 'panel', spec: /** @type {Spec} */ (PANEL.find((spec) => spec.id === 'enabled')), ask: 'gitchop:panel', set: 'gitchop:panel:settings', needsToken: false },
+  { id: 'pulls', spec: /** @type {Spec} */ (PULLS.find((spec) => spec.id === 'enabled')), ask: 'gitchop:pulls', set: 'gitchop:pulls:settings', needsToken: true, after: loadPulls },
+  { id: 'news', spec: /** @type {Spec} */ (NEWS.find((spec) => spec.id === 'enabled')), ask: 'gitchop:news', set: 'gitchop:news:settings', needsToken: false },
+  { id: 'contributions', spec: /** @type {Spec} */ (CONTRIBUTIONS.find((spec) => spec.id === 'enabled')), ask: 'gitchop:contributions', set: 'gitchop:contributions:settings', needsToken: true },
 ];
 
+/** @type {number | null} */
 let statusTimer = null;
 let busy = false;
+/** @type {Record<string, { settings?: { enabled?: number }, hasToken?: boolean }>} */
 let current = {};
 
 function flash(text) {
@@ -35,8 +50,13 @@ function flash(text) {
   }, 2600);
 }
 
+/**
+ * @template {MessageType} T
+ * @param {Message<T>} message
+ * @returns {Promise<Answer<T>>}
+ */
 async function ask(message) {
-  const response = await api.runtime.sendMessage(message);
+  const response = await send(message);
   if (!response?.ok) throw new Error(response?.error ?? 'The background script did not answer.');
   return response;
 }
@@ -65,7 +85,10 @@ async function guard(node, work) {
   }
 }
 
-/** One switch per feature, in the same dress as the chop effect's own. */
+/**
+ * One switch per feature, in the same dress as the chop effect's own.
+ * @param {(typeof FEATURES)[number]} feature
+ */
 function switchRow(feature) {
   const row = element('div', 'slider slider-toggle');
   row.title = feature.spec.hint;
@@ -111,7 +134,7 @@ function render(error) {
       element(
         'p',
         'note',
-        'Pull requests and contributions need a token under Tokens. The switches keep your choice for when there is one.',
+        'Pull requests and contributions need a sign-in or a token under Sign-in. The switches keep your choice for when there is one.',
       ),
     );
   }

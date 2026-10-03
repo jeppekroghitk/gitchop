@@ -3,3 +3,9 @@
 
 # Built by dev/build.mjs; belongs on a release, not in the tree.
 dist/
+
+# The harness's file:// copy of the content script, from dev/bundle.mjs and every build.
+dev/content.js
+
+# The build's tools, from `npm ci`; package-lock.json pins them.
+node_modules/

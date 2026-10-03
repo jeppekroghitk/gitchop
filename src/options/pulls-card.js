@@ -1,14 +1,18 @@
-import { api } from '../lib/links.js';
+import { send } from '../lib/messages.js';
 import { SWITCHES } from '../lib/pulls.js';
 import { tokenGate } from './pages.js';
 
-const host = document.getElementById('pulls');
-const statusEl = document.getElementById('pulls-status');
-/** Under the card: what is worth knowing about the settings as they stand. */
-const notes = document.getElementById('pulls-notes');
+/** @import { Answer, Message, MessageType } from '../background/messages.js' */
 
+const host = /** @type {HTMLElement} */ (document.getElementById('pulls'));
+const statusEl = /** @type {HTMLElement} */ (document.getElementById('pulls-status'));
+/** Under the card: what is worth knowing about the settings as they stand. */
+const notes = /** @type {HTMLElement} */ (document.getElementById('pulls-notes'));
+
+/** @type {number | null} */
 let statusTimer = null;
 let busy = false;
+/** @type {Answer<'gitchop:pulls'> | null} */
 let current = null;
 
 function flash(text) {
@@ -20,8 +24,13 @@ function flash(text) {
   }, 2600);
 }
 
+/**
+ * @template {MessageType} T
+ * @param {Message<T>} message
+ * @returns {Promise<Answer<T>>}
+ */
 async function ask(message) {
-  const response = await api.runtime.sendMessage(message);
+  const response = await send(message);
   if (!response?.ok) throw new Error(response?.error ?? 'The background script did not answer.');
   return response;
 }
@@ -100,8 +109,8 @@ function render(state, error) {
       element(
         'p',
         'note',
-        'A classic token with repo, or a fine-grained one with Pull requests: read-only per owner. ' +
-          'Without one there is no column.',
+        'Signing in with GitHub covers it where gitchop is installed; so does a classic token with repo, ' +
+          'or a fine-grained one with Pull requests: read-only per owner. Without one there is no column.',
       ),
     );
     host.append(tokenGate());

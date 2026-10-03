@@ -24,20 +24,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+
+      # esbuild, for the bundles, TypeScript, for the type check, and ESLint; package-lock.json pins them.
+      - name: Install the build's tools
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
 
       - name: Tests
-        run: |
-          node dev/context.test.mjs
-          node dev/repos.test.mjs
-          node dev/effects.test.mjs
-          node dev/pulls.test.mjs
-          node dev/news.test.mjs
-          node dev/contributions.test.mjs
-          node dev/odometer.test.mjs
-          node dev/links.test.mjs
-          node dev/gist.test.mjs
-          node dev/rate.test.mjs
-          node dev/menu.test.mjs
+        run: npm test
 
       # A tag that disagrees with the manifest ships a package the stores will reject as a duplicate
       # version, or worse, silently reuses one. Cheaper to stop here.

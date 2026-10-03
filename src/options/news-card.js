@@ -1,13 +1,18 @@
 import { api } from '../lib/links.js';
+import { send } from '../lib/messages.js';
 import { DAYS, HOUR, isRepoName, proseText } from '../lib/news.js';
 
-const host = document.getElementById('news');
-const statusEl = document.getElementById('news-status');
-/** Under the card: what is worth knowing about the settings as they stand. */
-const notes = document.getElementById('news-notes');
+/** @import { Answer, Message, MessageType } from '../background/messages.js' */
 
+const host = /** @type {HTMLElement} */ (document.getElementById('news'));
+const statusEl = /** @type {HTMLElement} */ (document.getElementById('news-status'));
+/** Under the card: what is worth knowing about the settings as they stand. */
+const notes = /** @type {HTMLElement} */ (document.getElementById('news-notes'));
+
+/** @type {number | null} */
 let statusTimer = null;
 let busy = false;
+/** @type {Answer<'gitchop:news'> | null} */
 let current = null;
 
 function flash(text) {
@@ -19,8 +24,13 @@ function flash(text) {
   }, 2600);
 }
 
+/**
+ * @template {MessageType} T
+ * @param {Message<T>} message
+ * @returns {Promise<Answer<T>>}
+ */
 async function ask(message) {
-  const response = await api.runtime.sendMessage(message);
+  const response = await send(message);
   if (!response?.ok) throw new Error(response?.error ?? 'The background script did not answer.');
   return response;
 }
@@ -69,6 +79,11 @@ async function guard(node, work) {
   }
 }
 
+/**
+ * @template {'gitchop:news:settings' | 'gitchop:news:subscribe' | 'gitchop:news:unsubscribe' | 'gitchop:news:refresh'} T
+ * @param {Message<T>} message
+ * @param {string} word
+ */
 async function apply(message, word) {
   const result = await ask(message);
   flash(word);
@@ -298,7 +313,7 @@ export function watch() {
   api.storage.onChanged.addListener((changes, area) => {
     if (!((area === 'sync' && changes.news) || (area === 'local' && changes.newsCache))) return;
     if (busy) return;
-    const typing = host.contains(document.activeElement) && document.activeElement.tagName === 'INPUT' && document.activeElement.value;
+    const typing = host.contains(document.activeElement) && /** @type {Element} */ (document.activeElement).tagName === 'INPUT' && /** @type {HTMLInputElement} */ (document.activeElement).value;
     if (!typing) load();
   });
 }
