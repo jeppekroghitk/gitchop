@@ -494,12 +494,19 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
       status.dataset.network = String(flow?.status === 'network');
       status.append(el('span', 'gw-pulse'), el('span', 'gw-status-line', code ? statusLine(flow) : 'Asking GitHub for a code…'));
       if (code) status.append(el('span', 'gw-count', countdown(code.expiresAt)));
+      // Typing a code into GitHub for something unfamiliar reads as a trick unless it says what
+      // is being connected, what that may do, and how it is undone.
       return [
-        el('h1', 'gw-title', 'Enter this code on GitHub'),
-        el('p', 'gw-lede', overlay ? 'Open GitHub, type the code, approve, and come back to this tab.' : 'Open GitHub, type the code, approve. This page carries on by itself.'),
+        el('h1', 'gw-title', 'Connect gitchop to your GitHub account'),
+        el('p', 'gw-lede', 'Open GitHub and enter this code to approve the connection.'),
         codeKeys(code ? code.userCode : null),
         row,
         status,
+        el(
+          'p',
+          'gw-fine',
+          'gitchop connects through its own GitHub app, so it never sees your password. The app can read your repositories, issues and pull requests, but never change them, and keeps your settings backup in a secret gist. You can disconnect it at any time in your GitHub settings.',
+        ),
       ];
     }
 

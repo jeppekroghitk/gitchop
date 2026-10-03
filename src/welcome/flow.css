@@ -212,6 +212,13 @@
   margin-top: 20px;
 }
 
+.gw-screen > .gw-status + .gw-fine {
+  max-width: 52ch;
+  margin-top: 48px;
+  padding-top: 20px;
+  border-top: 1px solid var(--gw-line);
+}
+
 .gw-screen > .gw-code {
   margin-top: 40px;
 }
