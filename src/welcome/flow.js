@@ -472,23 +472,6 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     return row;
   }
 
-  function copyButton() {
-    const code = /** @type {SignInCode} */ (flow?.code);
-    const copy = button('Copy code', async () => {
-      try {
-        await navigator.clipboard.writeText(code.userCode);
-        copy.textContent = 'Copied';
-        announce('Code copied.');
-      } catch {
-        copy.textContent = 'Copy failed';
-      }
-      setTimeout(() => {
-        if (copy.isConnected) copy.textContent = 'Copy code';
-      }, 1600);
-    });
-    return copy;
-  }
-
   function signInScreen() {
     paintSteps('signin');
     if (connectedAs) {
@@ -507,10 +490,18 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     }
     if (!flow || flow.phase === 'starting' || flow.phase === 'code') {
       const code = flow?.phase === 'code' && flow.code ? flow.code : null;
-      const open = linkButton('Open GitHub', code?.verificationUri ?? DEVICE_URL, { primary: true });
+      // One button does both: the code goes to the clipboard on the way out, so GitHub's page
+      // only needs a paste. The link still opens the tab itself, as a link the browser trusts.
+      const open = linkButton('Copy code and open GitHub', code?.verificationUri ?? DEVICE_URL, { primary: true });
       const row = actions(open);
-      if (code) row.append(copyButton());
-      else {
+      if (code) {
+        open.addEventListener('click', () => {
+          navigator.clipboard.writeText(code.userCode).then(
+            () => announce('Code copied. Paste it on GitHub.'),
+            () => {},
+          );
+        });
+      } else {
         open.setAttribute('aria-disabled', 'true');
         open.tabIndex = -1;
         open.addEventListener('click', (event) => event.preventDefault());
@@ -526,7 +517,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
       // is being connected, what that may do, and how it is undone.
       return [
         el('h1', 'gw-title', 'Connect gitchop to your GitHub account'),
-        el('p', 'gw-lede', 'Open GitHub and enter this code to approve the connection.'),
+        el('p', 'gw-lede', 'The button copies this code and opens GitHub. Paste it there to approve the connection.'),
         codeKeys(code ? code.userCode : null),
         row,
         status,
