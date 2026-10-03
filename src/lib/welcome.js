@@ -2,10 +2,10 @@
  * The welcome: says what signing in unlocks and carries the sign-in out, one decision per screen.
  * Nothing opens on install; a new user meets it the first time they press "." on GitHub, inside
  * the overlay, after the chop. Its page of its own is behind the toolbar button and in Settings.
- * Two marks in storage.local, named in src/background/keys.js, decide where a new user is pointed
- * afterwards, and both are only ever set, never derived: the welcome was finished or put aside,
- * and the quiet sign-in row in the menu was waved away. Nothing here touches the extension API,
- * so the rules run under plain node.
+ * Two marks in storage.local, named in src/background/keys.js, record the user's own answers: no
+ * to signing in, and the quiet sign-in row in the menu waved away. Both are set only by the user,
+ * and forgotten when a working sign-in or token arrives, so losing it later asks again. Nothing
+ * here touches the extension API, so the rules run under plain node.
  */
 
 /** The page, relative to the package root, as runtime.getURL takes it. */
@@ -21,15 +21,15 @@ export const CONSENT_HASH = '#consent';
 export const WELCOME_SINCE = '2.10.0';
 
 /**
- * What decides both: how many tokens are saved — a sign-in counts, even one GitHub has since
- * refused, since whoever has one has already been through the sign-in — and the two marks.
+ * What decides both: how many working tokens are saved — a sign-in GitHub has since refused, or
+ * whose app was removed, does not count — and the two marks.
  * @typedef {{ tokens: number, welcomed: boolean, hintDismissed: boolean }} WelcomeFacts
  */
 
 /**
- * Whether the welcome is still owed: someone who has neither signed in, nor saved a token, nor
- * put the welcome aside. Then the "." overlay shows it in place of the menu, and the toolbar
- * button opens its page rather than Settings.
+ * Whether the welcome is owed: someone with no working sign-in or token who has not said no to
+ * signing in. Then the "." overlay shows it in place of the menu, and the toolbar button opens its
+ * page rather than Settings. A sign-in that stops working brings it back.
  * @param {Partial<WelcomeFacts> | null | undefined} facts
  * @returns {boolean}
  */

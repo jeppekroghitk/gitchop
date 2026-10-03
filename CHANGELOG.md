@@ -9,8 +9,10 @@ it from.
   and the welcome takes the menu's place in the overlay — what signing in unlocks, **Sign in with
   GitHub** carried out right there (the code, GitHub's device page in a new tab, the organisations to
   install the app on), and **Continue without signing in**, which drops straight into the menu.
-  Once put aside that way, or signed in, it never shows again; Escape or the ✕ in the corner only
-  close it, and the next press greets again. Nothing opens on install. The same welcome, drawn by
+  Put aside that way, it stays away; Escape or the ✕ in the corner only close it, and the next
+  press greets again. A working sign-in or token keeps it away while it works: should the sign-in
+  stop working, signed out or the app removed on GitHub, the welcome comes back as *Sign in
+  again*, until the user once more chooses to go on without. Nothing opens on install. The same welcome, drawn by
   the same code, has a page of its own: the toolbar button opens it instead of Settings until you
   sign in, save a token or put it aside. While nothing is signed in, the menu ends in a quiet *Sign
   in to search your private repositories* row, with a ✕ to hide it; it starts the sign-in in the

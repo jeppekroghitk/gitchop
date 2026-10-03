@@ -401,6 +401,15 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     const go = button('Sign in with GitHub', begin, { primary: true });
     go.classList.add('gw-btn-big');
     if (overlay) {
+      // Back because the sign-in stopped working — signed out on GitHub, or the app removed — is
+      // no first visit, and is not greeted as one.
+      if (appEntry(sync)?.needsSignIn) {
+        return [
+          el('h1', 'gw-title', 'Sign in again.'),
+          el('p', 'gw-lede', 'gitchop is no longer connected to your GitHub account. Sign in to unlock everything gitchop can do.'),
+          actions(go),
+        ];
+      }
       return [
         el('h1', 'gw-title', 'Welcome to gitchop.'),
         el('p', 'gw-lede', 'Sign in with GitHub to unlock everything gitchop can do.'),
@@ -871,7 +880,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     skipped = false;
     const app = appEntry(sync);
     orgsSkipped = !(app && app.installations && reachedAll(app));
-    await ask({ type: 'gitchop:welcome:done' }).catch(() => {});
+    // Not marked done: the sign-in itself keeps the welcome away, and only for as long as it works.
     go('ready');
   }
 
@@ -1017,6 +1026,9 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     }
     if (gone) return true;
     const app = appEntry(sync);
+    // The first screen went up before the sign-in was read; one that has stopped working is
+    // greeted as a return, not a first visit.
+    if (app?.needsSignIn && screen === 'hello') render();
     if (app && !app.needsSignIn) {
       stopTimers();
       flow = null;

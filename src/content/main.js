@@ -125,7 +125,11 @@ function install() {
     } catch {
       /* not owed: the menu is always the safe answer */
     }
-    if (read === owedRead) owed = next;
+    if (read !== owedRead) return;
+    // Owed again after the menu was shown here — the sign-in was lost meanwhile — the next press
+    // greets in this tab too, rather than waiting for a reload.
+    if (next && owed === false) menuSeen = false;
+    owed = next;
   }
   readOwed();
   try {

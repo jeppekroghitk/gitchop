@@ -86,23 +86,23 @@ test('a first install opens nothing, and seeds the links', async () => {
   assert.ok(Array.isArray(sync.data.links) && sync.data.links.length > 0, 'the default links are there to press the dot for');
 });
 
-test('the first press is owed the welcome until there is a sign-in, a token or it was put aside', async () => {
+test('the press is owed the welcome until there is a working sign-in or token, or a no to signing in', async () => {
   reset();
   assert.equal((await send({ type: 'gitchop:welcome' })).first, true, 'a fresh profile: the welcome, in place of the menu');
 
-  // Continue without signing in, or the end of the welcome, sends this; Escape and the close
-  // button only close it, so it greets the next press again.
+  // Continue without signing in sends this; Escape and the close button only close the welcome,
+  // so it greets the next press again.
   assert.deepEqual(await send({ type: 'gitchop:welcome:done' }), { ok: true });
   assert.equal(local.data.welcomed, true, 'the mark the content script reads straight from storage');
-  assert.equal((await send({ type: 'gitchop:welcome' })).first, false, 'put aside: the next press is the menu, for good');
+  assert.equal((await send({ type: 'gitchop:welcome' })).first, false, 'a no to signing in: the next press is the menu');
 
   reset();
   local.data.sync = structuredClone(someToken);
-  assert.equal((await send({ type: 'gitchop:welcome' })).first, false, 'a token saved: never the welcome');
+  assert.equal((await send({ type: 'gitchop:welcome' })).first, false, 'a token saved: no welcome');
 
   reset();
   local.data.sync = { tokens: [{ ...someToken.tokens[0], kind: 'app', needsSignIn: true }] };
-  assert.equal((await send({ type: 'gitchop:welcome' })).first, false, 'a sign-in GitHub has since refused still counts');
+  assert.equal((await send({ type: 'gitchop:welcome' })).first, true, 'a sign-in GitHub has refused, or whose app was removed: the welcome again');
 });
 
 test('the overlay signs in where it is when nothing is left to prompt for, and hands it to the page otherwise', async () => {
@@ -151,23 +151,33 @@ test('an update opens nothing, and an update from before the welcome leaves the 
   assert.equal((await send({ type: 'gitchop:welcome' })).first, true, 'an update of the browser changes nothing');
 });
 
-test('a first sign-in or token is the welcome done, so taking every token away later does not bring it back', async () => {
+test('a working sign-in or token forgets an earlier no, so losing it later brings the welcome back', async () => {
   reset();
   const changed = (oldValue, newValue) => {
     for (const listener of listeners['storage.onChanged']) listener({ sync: { oldValue, newValue } }, 'local');
   };
+  local.data.welcomed = true;
+  local.data.menuHintDismissed = true;
   changed(undefined, structuredClone(someToken));
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(local.data.welcomed, true);
-  assert.equal((await send({ type: 'gitchop:welcome' })).first, false, 'no tokens now, but no welcome either');
+  assert.equal(local.data.welcomed, undefined, 'the no to signing in is forgotten');
+  assert.equal(local.data.menuHintDismissed, undefined, 'and so is the menu row waved away');
+  assert.equal((await send({ type: 'gitchop:welcome' })).first, true, 'with no token now, the welcome is owed again');
 
   reset();
+  local.data.welcomed = true;
   changed(structuredClone(someToken), { tokens: [] });
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(local.data.welcomed, undefined, 'a token leaving marks nothing');
+  assert.equal(local.data.welcomed, true, 'a token leaving forgets nothing');
+
+  reset();
+  local.data.welcomed = true;
+  changed({ tokens: [{ ...someToken.tokens[0], kind: 'app', needsSignIn: true }] }, structuredClone(someToken));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(local.data.welcomed, undefined, 'signed in again after a refusal: the no is forgotten too');
 });
 
-test('the toolbar button opens the welcome until there is a sign-in, a token or the welcome was put aside', async () => {
+test('the toolbar button opens the welcome until there is a working sign-in or token, or a no to signing in', async () => {
   reset();
   await click();
   assert.deepEqual(tabs, [{ url: WELCOME }], 'nothing yet: the welcome');
@@ -188,7 +198,8 @@ test('the toolbar button opens the welcome until there is a sign-in, a token or 
   reset();
   local.data.sync = { tokens: [{ ...someToken.tokens[0], kind: 'app', needsSignIn: true }] };
   await click();
-  assert.equal(optionsOpened, 1, 'a sign-in GitHub has since refused still counts: Settings is where it is fixed');
+  assert.deepEqual(tabs, [{ url: WELCOME }], 'a sign-in GitHub has since refused: the welcome, to sign in again');
+  assert.equal(optionsOpened, 0);
 });
 
 test('the menu ends in the sign-in row while there is no token, until it is waved away', async () => {

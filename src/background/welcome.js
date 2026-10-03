@@ -11,15 +11,18 @@ import { HINT_KEY, WELCOMED_KEY } from './keys.js';
  * the toolbar button until the user has signed in or put the welcome aside, and from the overlay,
  * at the browser's question alone, when signing in needs a prompt only an extension page can
  * show. tabs.create needs no permission in either browser when it only opens a page and reads
- * nothing back. A first sign-in or token counts as welcomed for good (see index.js), so taking
- * every token away later does not bring the welcome back.
+ * nothing back. What keeps the welcome away is a working sign-in or token, or the user saying no
+ * to signing in; a sign-in that is removed or refused later brings it back, and a new sign-in
+ * forgets an earlier no (see index.js), so that loss is not met by a decision made before it.
  */
 
 /** @returns {Promise<WelcomeFacts>} */
 export async function welcomeFacts() {
   const [config, stored] = await Promise.all([readConfig(), api.storage.local.get([WELCOMED_KEY, HINT_KEY])]);
   return {
-    tokens: config.tokens.length,
+    // Only tokens that still work: a sign-in GitHub has refused, or whose app was removed, is
+    // no reason to keep the welcome away.
+    tokens: config.tokens.filter((entry) => !entry.needsSignIn).length,
     welcomed: stored[WELCOMED_KEY] === true,
     hintDismissed: stored[HINT_KEY] === true,
   };
@@ -52,6 +55,11 @@ export async function openWelcome({ at, openerTabId } = {}) {
 export async function markWelcomed() {
   await api.storage.local.set({ [WELCOMED_KEY]: true });
   return {};
+}
+
+/** A working sign-in or token arrived: an earlier no to signing in, and to the menu's row, no longer stands. */
+export async function forgetWelcomeAnswers() {
+  await api.storage.local.remove([WELCOMED_KEY, HINT_KEY]);
 }
 
 /** @returns {Promise<{}>} */

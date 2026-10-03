@@ -81,9 +81,10 @@ Nothing opens on install. The first time you press <kbd>.</kbd> on GitHub, the c
 short welcome takes the menu's place: what signing in unlocks, and **Sign in with GitHub**, carried
 out right there in the overlay — the code, GitHub's device page in a new tab, then the
 organisations to install the app on — ending in the menu. **Continue without signing in** at the
-bottom puts it aside, and it never shows again; Escape or the ✕ only close it, and the next press
-greets you again. Until you sign in, save a token or put
-the welcome aside, the toolbar button opens the same welcome on a page of its own rather than
+bottom puts it aside; Escape or the ✕ only close it, and the next press greets you again. A
+working sign-in or token keeps it away too, but only while it works: signed out, or with the app
+removed on GitHub, the welcome is back, offering to sign in again, until you once more choose to
+go on without. Until then, the toolbar button opens the same welcome on a page of its own rather than
 Settings. While nothing is signed in, the menu ends in one quiet row, *Sign in to search your
 private repositories*, that starts the sign-in in the overlay; its ✕ hides it for good. On Firefox,
 until you have consented to gitchop holding a token, **Sign in with GitHub** opens a gitchop tab
