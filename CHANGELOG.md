@@ -5,6 +5,11 @@ it from.
 
 ## Unreleased
 
+- A welcome page opens on install: the <kbd>.</kbd> key, **Sign in with GitHub** carried out on the
+  page itself, the organisations to install the app on, and **Continue without signing in**. The
+  toolbar button opens it instead of Settings until you sign in, save a token or put it aside, and
+  the menu ends in a quiet *Sign in to search your private repositories* row, with a ✕ to hide it,
+  while nothing is signed in. Updates open nothing.
 - Sign in with GitHub ([#17](https://github.com/jeppekroghitk/gitchop/issues/17)). Settings shows a
   short code to approve at github.com/login/device, and gitchop is signed in through its own GitHub
   App, *gitchop for GitHub*: read-only on repositories, Gists for the backup, and only where the app

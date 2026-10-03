@@ -47,6 +47,7 @@ export function createKeyboard(menu) {
     const across = regions().includes('pulls');
     if (region === 'pulls') hint(['enter', 'open'], ['←', 'back'], [null, 'type to search']);
     else if (drill) hint(['enter', 'open'], ['←', 'back']);
+    else if (items[activeIndex]?.entry.hint) hint(['enter', 'sign in'], ['del', 'hide'], ['esc', 'close']);
     else if (items[activeIndex]?.entry.repo) hint(['enter', 'open'], ['→', 'inside'], ...(across ? [['tab', 'pull requests']] : []));
     else hint(['enter', 'open'], ...(across ? [['→', 'pull requests']] : []), ['esc', 'close']);
   }
@@ -119,7 +120,7 @@ export function createKeyboard(menu) {
 
   /** Tab stays inside the panel: it wraps at both ends instead of reaching the page behind. */
   function trapTab(event) {
-    const stops = /** @type {HTMLElement[]} */ ([...panel.querySelectorAll('input, a[href], button')]).filter((stop) => !stop.hidden);
+    const stops = /** @type {HTMLElement[]} */ ([...panel.querySelectorAll('input, a[href], button')]).filter((stop) => !stop.hidden && stop.tabIndex >= 0);
     if (stops.length === 0) return;
     const here = stops.indexOf(/** @type {HTMLElement} */ (/** @type {ShadowRoot} */ (panel.getRootNode()).activeElement));
     const edge = event.shiftKey ? 0 : stops.length - 1;
@@ -185,6 +186,12 @@ export function createKeyboard(menu) {
     if (event.key === 'ArrowUp') {
       event.preventDefault();
       menu.list.move(-1);
+      return;
+    }
+    // On the sign-in row, with nothing typed, the keys can wave it away as the cross does.
+    if ((event.key === 'Delete' || event.key === 'Backspace') && !filter.value && menu.list.active()?.hint) {
+      event.preventDefault();
+      menu.list.hideHint();
       return;
     }
     if (event.key === 'Enter' && /** @type {ShadowRoot} */ (panel.getRootNode()).activeElement === filter) {

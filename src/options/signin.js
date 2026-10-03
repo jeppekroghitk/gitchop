@@ -1,10 +1,12 @@
-import { api, loadLinks } from '../lib/links.js';
-import { ownersFromLinks, reaches } from '../lib/repos.js';
-import { INSTALL_URL, REVOKE_URL, missingInstalls } from '../lib/signin.js';
+import { loadLinks } from '../lib/links.js';
+import { ownersFromLinks } from '../lib/repos.js';
+import { INSTALL_URL, REVOKE_URL } from '../lib/signin.js';
+import { afterLostPoll, afterPoll, appEntry, countdown, endedLine, ending, minutesLeft, ownerReach, requestAccess, statusLine } from '../lib/signin-flow.js';
 
 /** @import { Answer, Message, MessageType } from '../background/messages.js' */
 /** @import { SignInCode } from '../background/signin.js' */
 /** @import { SyncState, TokenView } from '../background/config.js' */
+/** @import { Flow } from '../lib/signin-flow.js' */
 
 /**
  * The sign-in block at the top of the token card. The card is redrawn from scratch whenever the
@@ -34,19 +36,6 @@ import { INSTALL_URL, REVOKE_URL, missingInstalls } from '../lib/signin.js';
  *   rerender: (sync: SyncState) => void,
  *   openAdvanced: (owner?: string) => void,
  * }} Hooks
- */
-
-/**
- * The flow on screen. `starting` is waiting on GitHub for a code; `code` is showing one, with
- * `status` saying whether the last poll got through; the rest are how a flow ended without a
- * sign-in, each with its own way on.
- * @typedef {{
- *   phase: 'starting' | 'code' | 'expired' | 'denied' | 'disabled' | 'error',
- *   code?: SignInCode,
- *   interval: number,
- *   status?: 'waiting' | 'network',
- *   error?: string | null,
- * }} Flow
  */
 
 /** @type {Flow | null} */
@@ -152,11 +141,6 @@ function quiet(text, href) {
   return node;
 }
 
-/** @param {SyncState | null} sync */
-function appEntry(sync) {
-  return sync?.tokens.find((entry) => entry.kind === 'app') ?? null;
-}
-
 function stopTimers() {
   clearTimeout(pollTimer);
   pollTimer = null;
@@ -189,24 +173,11 @@ function startTick() {
   }, 1000);
 }
 
-/** @param {string} iso */
-function countdown(iso) {
-  const left = Math.max(0, Math.round((Date.parse(iso) - Date.now()) / 1000));
-  const minutes = Math.floor(left / 60);
-  const seconds = String(left % 60).padStart(2, '0');
-  return `Code expires in ${minutes}:${seconds}`;
-}
-
 /** Redraws the block for a change of phase, and hands focus on as the change asked. */
 function redraw() {
   if (!host || !lastHooks) return;
   host.replaceChildren(...contents(lastSync, lastHooks));
   settleFocus();
-}
-
-/** @param {Flow | null} current */
-function statusLine(current) {
-  return current?.status === 'network' ? 'Lost touch with GitHub, still trying.' : 'Waiting for you to approve on GitHub…';
 }
 
 /** A poll's answer within the code phase: the status line changes in place, and is announced if it changed. */
@@ -216,12 +187,6 @@ function updateStatus() {
   if (!line || line.textContent === text) return;
   line.textContent = text;
   announce(text);
-}
-
-/** @param {string} iso */
-function minutesLeft(iso) {
-  const minutes = Math.max(1, Math.round((Date.parse(iso) - Date.now()) / 60000));
-  return minutes === 1 ? 'a minute' : `${minutes} minutes`;
 }
 
 /**
@@ -258,53 +223,34 @@ async function pollOnce() {
   } catch {
     // The background did not answer; it is woken by the next message, so ask again.
     if (flow?.phase !== 'code') return;
-    flow = { ...flow, status: 'network' };
+    flow = afterLostPoll(flow);
     schedule(flow.interval);
     updateStatus();
     return;
   }
   if (flow?.phase !== 'code') return;
-  switch (reply.status) {
-    // Still waiting: same phase, so only the status line changes, and focus stays where it is.
-    case 'pending':
-    case 'slow_down':
-      flow = { ...flow, interval: reply.interval || flow.interval, status: 'waiting' };
-      schedule(flow.interval);
-      updateStatus();
-      return;
-    case 'network':
-      flow = { ...flow, interval: reply.interval || flow.interval, status: 'network' };
-      schedule(flow.interval);
-      updateStatus();
-      return;
-    case 'done':
-    case 'none':
-      // Signed in, here or in another tab, or cancelled there: the card says which, from the state.
-      flow = null;
-      stopTimers();
-      focusNext = '.btn-primary, button';
-      if (reply.status === 'done') {
-        hooks.flash('signed in');
-        announce('Signed in with GitHub.');
-      }
-      if (reply.state) hooks.rerender(reply.state);
-      else redraw();
-      if (reply.status === 'done') checkInstallations(hooks, appEntry(reply.state));
-      return;
-    case 'disabled':
-      flow = { phase: 'disabled', interval: flow.interval };
-      stopTimers();
-      hooks.openAdvanced();
-      break;
-    case 'expired':
-    case 'denied':
-      flow = { phase: reply.status, interval: flow.interval };
-      stopTimers();
-      break;
-    default:
-      flow = { phase: 'error', interval: flow.interval, error: reply.error ?? 'GitHub would not finish the sign-in.' };
-      stopTimers();
+  const next = afterPoll(flow, reply);
+  flow = next.flow;
+  // Still waiting: same phase, so only the status line changes, and focus stays where it is.
+  if (next.verdict === 'waiting' && flow) {
+    schedule(flow.interval);
+    updateStatus();
+    return;
   }
+  stopTimers();
+  if (next.verdict === 'signed-in' || next.verdict === 'gone') {
+    // Signed in, here or in another tab, or cancelled there: the card says which, from the state.
+    focusNext = '.btn-primary, button';
+    if (next.verdict === 'signed-in') {
+      hooks.flash('signed in');
+      announce('Signed in with GitHub.');
+    }
+    if (reply.state) hooks.rerender(reply.state);
+    else redraw();
+    if (next.verdict === 'signed-in') checkInstallations(hooks, appEntry(reply.state));
+    return;
+  }
+  if (flow?.phase === 'disabled') hooks.openAdvanced();
   focusNext = '.btn-primary, .signin-retry';
   announce(endedLine(flow));
   redraw();
@@ -329,24 +275,6 @@ async function checkInstallations(hooks, app) {
     checking = false;
     installError = String(error.message ?? error);
     redraw();
-  }
-}
-
-/**
- * The hosts, and on Firefox the consent to hold a token, in one request. Firefox is told apart by
- * runtime.getBrowserInfo, which only it has; `browser` is no tell, since current Chrome defines it
- * too. Chrome refuses the Firefox-only data_collection key by throwing on the spot rather than by
- * rejecting, which is why the call sits inside a try. A browser that cannot ask is let through:
- * the background checks the host permission again before asking GitHub for anything.
- * @returns {Promise<boolean>}
- */
-async function requestAccess() {
-  const origins = ['https://github.com/*', 'https://api.github.com/*'];
-  const firefox = typeof api.runtime.getBrowserInfo === 'function';
-  try {
-    return await api.permissions.request(firefox ? { origins, data_collection: ['authenticationInfo'] } : { origins });
-  } catch {
-    return true;
   }
 }
 
@@ -492,31 +420,6 @@ function codeBody(hooks) {
 }
 
 /**
- * What each way a flow can end says, what its button says, and for an error, the reason given:
- * GitHub's own words, or gitchop's, said under a plain line rather than in place of one.
- * @param {Flow | null} current
- * @returns {{ line: string, again: string, reason?: string }}
- */
-function ending(current) {
-  switch (current?.phase) {
-    case 'expired':
-      return { line: 'The code ran out before it was approved.', again: 'Get a new code' };
-    case 'denied':
-      return { line: 'Sign-in was declined on GitHub.', again: 'Try again' };
-    case 'disabled':
-      return { line: 'GitHub has sign-in by code switched off for gitchop. Use a personal access token for now.', again: 'Try again' };
-    default:
-      return { line: 'Sign-in did not finish.', again: 'Try again', reason: current?.error ?? undefined };
-  }
-}
-
-/** @param {Flow | null} current */
-function endedLine(current) {
-  const { line, reason } = ending(current);
-  return reason ? `${line} ${reason}` : line;
-}
-
-/**
  * How a flow ended without a sign-in, and the way on. A new code is only ever asked for on a click.
  * The line was announced as the flow ended; the button it is said beside takes the focus.
  * @param {Hooks} hooks
@@ -552,33 +455,6 @@ function idleBody(sync, hooks) {
   go.addEventListener('click', () => begin(hooks));
   body.push(actionRow(go));
   return body;
-}
-
-/**
- * The owners worth having the app on: the account itself, the owners the links name, and those the
- * saved fine-grained tokens were made for, which signing in might replace.
- * @param {SyncState | null} sync
- * @param {TokenView} app
- */
-function candidates(sync, app) {
-  /** @type {string[]} */
-  const owners = [];
-  if (app.login) owners.push(app.login);
-  owners.push(...linkOwners);
-  for (const entry of fineGrained(sync)) {
-    owners.push(...(entry.owners ?? []));
-    if (entry.target) owners.push(entry.target);
-  }
-  return owners;
-}
-
-/**
- * The saved tokens made for chosen owners. A classic token is left out: it reaches every owner,
- * and is the token signing in is most worth replacing, so it is not counted as covering anyone.
- * @param {SyncState | null} sync
- */
-function fineGrained(sync) {
-  return (sync?.tokens ?? []).filter((entry) => entry.kind !== 'app' && entry.kind !== 'classic');
 }
 
 /**
@@ -662,14 +538,7 @@ function reachTitle(count) {
 function accessStep(sync, app, hooks) {
   if (app.installations === null) return unknownAccess(hooks);
 
-  const installs = app.installations ?? [];
-  const missing = missingInstalls(installs, candidates(sync, app));
-  const tokens = fineGrained(sync);
-  const covered = missing.filter((owner) => tokens.some((entry) => reaches(entry, owner)));
-  const uncovered = missing.filter((owner) => !covered.includes(owner));
-  const classic = (sync?.tokens ?? []).some((entry) => entry.kind === 'classic');
-  const total = installs.length + missing.length;
-  const reached = installs.length + covered.length;
+  const { installs, covered, uncovered, classic, total, reached } = ownerReach(sync, app, linkOwners);
 
   if (uncovered.length === 0 && reached > 0) {
     const names = element('p', 'flow-summary');

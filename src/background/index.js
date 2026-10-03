@@ -15,6 +15,7 @@ import { PULLS_ALARM, refreshPulls, schedulePulls } from './pulls.js';
 import { SIGNIN_ALARM, pollSignIn } from './signin.js';
 import { noteBackedUpChange, pull } from './sync.js';
 import { sealLegacyTokens } from './tokens.js';
+import { openFromToolbar, openWelcome } from './welcome.js';
 
 /**
  * The gist is the durable copy; storage.sync is the working copy the menu reads, so the menu opens
@@ -37,6 +38,8 @@ api.runtime.onInstalled.addListener(async ({ reason }) => {
   if (reason === 'install') {
     const existing = await loadLinks();
     if (existing.length === 0) await saveLinks(withIds(DEFAULT_LINKS));
+    // A first install only, never an update: the welcome is the one page that says what the key does.
+    openWelcome().catch(() => {});
   }
   pull().catch(() => {});
   schedulePulls();
@@ -64,8 +67,9 @@ api.alarms?.onAlarm.addListener((alarm) => {
   }
 });
 
+// Until the user has signed in, saved a token or put the welcome aside, the button opens the welcome.
 api.action.onClicked.addListener(() => {
-  api.runtime.openOptionsPage();
+  openFromToolbar().catch(() => {});
 });
 
 sealLegacyTokens().catch(() => {});

@@ -25,6 +25,9 @@ import { createShell } from './menu/shell.js';
  *   onClose: () => void,
  *   onOptions: () => void,
  *   onLinksChanged?: (links: import('../lib/links.js').Link[]) => void,
+ *   hint: boolean,
+ *   onWelcome?: () => void,
+ *   onHintDismiss?: () => void,
  *   hasPanel: boolean,
  *   reduced: boolean,
  *   el: ReturnType<typeof createShell>,
@@ -61,9 +64,12 @@ import { createShell } from './menu/shell.js';
  *   onClose: () => void,
  *   onOptions: () => void,
  *   onLinksChanged?: Menu['onLinksChanged'],
+ *   hint?: boolean,
+ *   onWelcome?: () => void,
+ *   onHintDismiss?: () => void,
  * }} options
  */
-export function createMenu({ ctx, links, pulls, news, contributions, rate, panel: panelSetting, onClose, onOptions, onLinksChanged }) {
+export function createMenu({ ctx, links, pulls, news, contributions, rate, panel: panelSetting, onClose, onOptions, onLinksChanged, hint = false, onWelcome, onHintDismiss }) {
   // The count is built before the frame, which hangs it in whichever head stands nearest the panel.
   const count = createCount(contributions);
   const el = createShell({ panelSetting, pulls, news, count: count.view, onOptions });
@@ -73,6 +79,9 @@ export function createMenu({ ctx, links, pulls, news, contributions, rate, panel
     onClose,
     onOptions,
     onLinksChanged,
+    hint,
+    onWelcome,
+    onHintDismiss,
     hasPanel: el.hasPanel,
     reduced: matchMedia('(prefers-reduced-motion: reduce)').matches,
     el,

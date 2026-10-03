@@ -175,6 +175,47 @@ export function createList(menu, links) {
     list.append(row);
   }
 
+  /**
+   * The one quiet row at the foot of the list while there is nothing to search private
+   * repositories with: it opens the welcome, where the sign-in is, and its cross waves it away for
+   * good. Last, under everything, so the links stay where they always are.
+   */
+  function addHint() {
+    const entry = {
+      usable: true,
+      url: '',
+      icon: '🔑',
+      label: 'Sign in to search your private repositories',
+      reason: '',
+      tip: '',
+      repo: null,
+      hint: true,
+      run: () => menu.onWelcome?.(),
+    };
+    addItem(entry);
+    const item = /** @type {HTMLElement} */ (state.items[state.items.length - 1].item);
+    item.dataset.hint = 'true';
+    const close = node('button', 'gc-hint-close', '✕');
+    close.type = 'button';
+    close.title = 'Hide this';
+    close.setAttribute('aria-label', 'Hide the sign-in hint');
+    close.tabIndex = -1;
+    close.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      hideHint();
+    });
+    item.lastElementChild?.replaceWith(close);
+  }
+
+  /** Waves the sign-in row away for good: its cross with the mouse, Delete or Backspace with the keys. */
+  function hideHint() {
+    if (!menu.hint) return;
+    menu.hint = false;
+    menu.onHintDismiss?.();
+    render();
+  }
+
   function render() {
     list.textContent = '';
     state.items = [];
@@ -207,6 +248,8 @@ export function createList(menu, links) {
     if (state.items.length === 0 && !typing) {
       list.append(note('No links yet.'));
     }
+
+    if (menu.hint && !typing) addHint();
 
     state.activeIndex = Math.max(0, Math.min(state.activeIndex, state.items.length - 1));
     menu.keyboard.paint();
@@ -241,6 +284,7 @@ export function createList(menu, links) {
     enterDrill,
     leaveDrill,
     persist,
+    hideHint,
     /** The links as they stand, the one just saved included. */
     links: () => current,
     /** The row the cursor is on in the panel, if there is one. */

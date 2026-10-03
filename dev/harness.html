@@ -523,6 +523,12 @@
               openSettings();
               return { ok: true };
             }
+            if (message.type === 'gitchop:welcome') return { ok: true, hint: sync.tokens.length === 0 && !store.hintDismissed };
+            if (message.type === 'gitchop:welcome:open') return { ok: true };
+            if (message.type === 'gitchop:welcome:hint:dismiss') {
+              store.hintDismissed = true;
+              return { ok: true };
+            }
             if (message.type === 'gitchop:panel') return { ok: true, settings: { ...store.panel }, show: store.panel.enabled === 1 };
             if (message.type === 'gitchop:panel:settings') {
               Object.assign(store.panel, message.patch);

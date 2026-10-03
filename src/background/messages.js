@@ -15,6 +15,7 @@ import { buildIndex, indexState, readIndex } from './repo-index.js';
 import { cancelSignIn, pendingSignIn, pollSignIn, refreshInstallations, startSignIn } from './signin.js';
 import { connectGist, pull, push, stopBackup } from './sync.js';
 import { addToken, loadTokens, removeToken } from './tokens.js';
+import { dismissMenuHint, markWelcomed, openWelcome, welcomeState } from './welcome.js';
 
 /** @import { Repo } from '../lib/repos.js' */
 /** @import { SyncState } from './config.js' */
@@ -33,6 +34,17 @@ const HANDLERS = {
     await api.runtime.openOptionsPage();
     return {};
   },
+  /**
+   * Instant: whether the menu ends in the quiet row that points at the sign-in.
+   * @returns {Promise<{ hint: boolean }>}
+   */
+  'gitchop:welcome': () => welcomeState(),
+  /** From the menu's sign-in row: a content script cannot open an extension page itself everywhere. */
+  'gitchop:welcome:open': () => openWelcome(),
+  /** The welcome was finished, or put aside: the toolbar button opens Settings from now on. */
+  'gitchop:welcome:done': () => markWelcomed(),
+  /** The menu's sign-in row was waved away. */
+  'gitchop:welcome:hint:dismiss': () => dismissMenuHint(),
   /**
    * Instant, from the local index. No network, so the menu can call it on every settle.
    * @param {{ query: string }} message

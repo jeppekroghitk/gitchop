@@ -12,3 +12,7 @@ export const NEWS_CACHE_KEY = 'newsCache';
 export const CONTRIB_CACHE_KEY = 'contributionsCache';
 /** In storage.session, not storage.local: the sign-in under way. */
 export const SIGNIN_KEY = 'signin';
+/** The welcome was finished, or put aside with Continue without signing in. */
+export const WELCOMED_KEY = 'welcomed';
+/** The menu's quiet sign-in row was waved away. */
+export const HINT_KEY = 'menuHintDismissed';

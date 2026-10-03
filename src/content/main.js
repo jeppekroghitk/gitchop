@@ -143,13 +143,14 @@ function install() {
     // The pull requests, the news and the contributions answer from their snapshots, so this is
     // storage reads only; no request holds the menu up, and a background that cannot answer simply
     // means no column, and no number, this time.
-    const [links, pulls, news, contributions, rate, panel] = await Promise.all([
+    const [links, pulls, news, contributions, rate, panel, welcome] = await Promise.all([
       readLinks(),
       ask({ type: 'gitchop:pulls' }),
       ask({ type: 'gitchop:news' }),
       ask({ type: 'gitchop:contributions' }),
       ask({ type: 'gitchop:rate' }),
       ask({ type: 'gitchop:panel' }),
+      ask({ type: 'gitchop:welcome' }),
     ]);
     if (state.stage !== stage) return;
 
@@ -166,6 +167,15 @@ function install() {
       onOptions: () => {
         ask({ type: 'gitchop:options' });
         closeChop();
+      },
+      // Nothing to search private repositories with yet: the list ends in one quiet row that says so.
+      hint: welcome?.ok ? welcome.hint : false,
+      onWelcome: () => {
+        ask({ type: 'gitchop:welcome:open' });
+        closeChop();
+      },
+      onHintDismiss: () => {
+        ask({ type: 'gitchop:welcome:hint:dismiss' });
       },
     });
     state.menu = menu;

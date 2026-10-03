@@ -75,9 +75,18 @@ panel stays. Without it, the column nearest where the panel would be — the pul
 news alone — ends in a strip with a *settings* word that opens Settings, since the row that did so
 sits in the links; the toolbar icon opens Settings either way.
 
+## Welcome
+
+On install, gitchop opens a welcome page in a new tab: what the <kbd>.</kbd> key does, and
+**Sign in with GitHub**, carried out right there — the code, the way to GitHub's device page, then
+the organisations to install the app on. **Continue without signing in** at the bottom puts it aside.
+Until you sign in, save a token or put the welcome aside, the toolbar button opens the welcome
+rather than Settings; an update never opens it. While nothing is signed in, the menu ends in one quiet
+row, *Sign in to search your private repositories*, that opens the welcome; its ✕ hides it for good.
+
 ## Signing in
 
-**Sign in with GitHub**, under Sign-in in Settings, is how gitchop reaches your private repositories,
+**Sign in with GitHub**, on the welcome page or under Sign-in in Settings, is how gitchop reaches your private repositories,
 pull requests and gist. It shows a short code; open github.com/login/device, type the code, and
 approve *gitchop for GitHub*. The page carries on by itself and says *Signed in as @you*. The sign-in
 renews itself in the background every eight hours or so, and after about six months unused, or if

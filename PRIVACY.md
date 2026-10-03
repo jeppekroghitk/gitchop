@@ -21,6 +21,7 @@ of any kind beyond GitHub itself.
 | The day's news for them — commit counts and authors, the first line of the latest commit message, pull request, issue and release titles | `storage.local` | No — never sent anywhere |
 | Your contributions — this year's count, the three whole years before it, and your login | `storage.local` | No — never sent anywhere |
 | Which gist to use, and when it last synced | `storage.local` | No |
+| Whether you finished or skipped the welcome, and whether you hid the menu's sign-in row | `storage.local` | No — never sent anywhere |
 
 The repository list holds names, URLs, descriptions and the private and archived flags — the same
 metadata GitHub shows on a repository's front page. It exists so that private repositories can be

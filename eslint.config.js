@@ -24,9 +24,9 @@ export default [
     },
   },
 
-  // The content script and the settings page: a page, with the extension APIs beside it.
+  // The content script, the settings page and the welcome: a page, with the extension APIs beside it.
   {
-    files: ['src/content/**/*.js', 'src/options/**/*.js'],
+    files: ['src/content/**/*.js', 'src/options/**/*.js', 'src/welcome/**/*.js'],
     languageOptions: {
       globals: { ...globals.browser, ...globals.webextensions },
     },

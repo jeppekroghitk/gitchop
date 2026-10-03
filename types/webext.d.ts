@@ -53,6 +53,7 @@ declare namespace WebExt {
     onStartup?: Event<() => void>;
     openOptionsPage(): Promise<void>;
     getManifest(): Manifest;
+    getURL(path: string): string;
     /** Firefox only, which is what makes it the way to tell the two apart. */
     getBrowserInfo?(): Promise<{ name: string; version: string }>;
   }
@@ -92,8 +93,14 @@ declare namespace WebExt {
     onRemoved?: Event<(permissions: PermissionSet) => void>;
   }
 
+  interface Tabs {
+    /** Opening a page needs no permission in either browser; only reading tabs back does. */
+    create(properties: { url: string; active?: boolean }): Promise<unknown>;
+  }
+
   interface Api {
     storage: Storage;
+    tabs: Tabs;
     runtime: Runtime;
     alarms?: Alarms;
     action: Action;

@@ -9,8 +9,8 @@
  * modules like the rest of the code and shares src/lib with the background. The second bundle is
  * the content script's stage on its own, for the settings page: its Preview plays the real chop,
  * and the stage brings its stylesheet in as text, which no browser can import. Everything else —
- * the background, the rest of the settings page and src/lib — is left as it is: modules the
- * browser loads directly, as they always have been.
+ * the background, the rest of the settings page, the welcome and src/lib — is left as it is:
+ * modules the browser loads directly, as they always have been.
  *
  * Nothing is minified and there are no source maps, so what a store reviewer reads in a bundle is
  * the source, joined up. The one thing esbuild changes is names: the modules share one scope in a
@@ -40,7 +40,7 @@ export const BUNDLES = [
 export const HARNESS_COPY = 'dev/content.js';
 
 /** What the browser loads as modules straight from src/; whatever they import is carried loose. */
-const LOOSE = ['src/background/index.js', 'src/options/options.js'];
+const LOOSE = ['src/background/index.js', 'src/options/options.js', 'src/welcome/welcome.js'];
 
 /**
  * The oldest browsers the manifest admits (gecko.strict_min_version, and minimum_chrome_version in
