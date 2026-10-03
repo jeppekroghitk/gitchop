@@ -12,7 +12,7 @@ import { pullsState, refreshPulls, schedulePulls } from './pulls.js';
 import { readPullsSettings } from './pulls-store.js';
 import { rateState } from './rate.js';
 import { buildIndex, indexState, readIndex } from './repo-index.js';
-import { cancelSignIn, pendingSignIn, pollSignIn, refreshInstallations, startSignIn } from './signin.js';
+import { cancelSignIn, openDevicePage, pendingSignIn, pollSignIn, refreshInstallations, startSignIn } from './signin.js';
 import { connectGist, pull, push, stopBackup } from './sync.js';
 import { addToken, loadTokens, removeToken } from './tokens.js';
 import { dismissMenuHint, markWelcomed, openWelcome, signInAccess, welcomeState } from './welcome.js';
@@ -166,6 +166,13 @@ const HANDLERS = {
    * @returns {Promise<SignInPoll>}
    */
   'gitchop:signin:poll': () => pollSignIn(),
+  /**
+   * GitHub's device page, opened from the asking tab and closed again once the sign-in is done.
+   * @param {{}} _message
+   * @param {WebExt.MessageSender} [sender]
+   * @returns {Promise<{ opened: boolean }>}
+   */
+  'gitchop:signin:device': (_message, sender) => openDevicePage(sender?.tab?.id),
   /** @returns {Promise<{}>} */
   'gitchop:signin:cancel': () => cancelSignIn(),
   /**

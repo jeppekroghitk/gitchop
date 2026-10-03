@@ -21,7 +21,9 @@ it from.
   as does a first sign-in or token, so the welcome never replaces a menu someone already uses.
 - Back from approving on GitHub, the welcome says it is finishing the sign-in by itself while it
   checks, then shows *Connected to GitHub* for a moment before the organisations. If the code was
-  not approved after all, the code comes back with a line saying so.
+  not approved after all, the code comes back with a line saying so. One button copies the code and
+  opens GitHub's device page, and once the sign-in is done that page closes itself and the tab the
+  sign-in started in comes back to the front.
 - Escape closes gitchop from the pull requests and news columns too, instead of first moving the
   cursor back to the links.
 - Sign in with GitHub ([#17](https://github.com/jeppekroghitk/gitchop/issues/17)). Settings shows a

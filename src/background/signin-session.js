@@ -27,6 +27,8 @@ export const SIGNIN_ALARM = 'gitchop-signin';
  *   interval: number,
  *   nextPollAt: number,
  *   replaceId: string | null,
+ *   deviceTabId?: number,
+ *   openerTabId?: number,
  * }} SignInSession
  */
 

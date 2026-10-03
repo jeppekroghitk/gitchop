@@ -491,14 +491,23 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     if (!flow || flow.phase === 'starting' || flow.phase === 'code') {
       const code = flow?.phase === 'code' && flow.code ? flow.code : null;
       // One button does both: the code goes to the clipboard on the way out, so GitHub's page
-      // only needs a paste. The link still opens the tab itself, as a link the browser trusts.
+      // only needs a paste. The background opens the page, so it can close it again once the
+      // sign-in is done; a modified click is left to the browser, as for any link.
       const open = linkButton('Copy code and open GitHub', code?.verificationUri ?? DEVICE_URL, { primary: true });
       const row = actions(open);
       if (code) {
-        open.addEventListener('click', () => {
+        open.addEventListener('click', (event) => {
           navigator.clipboard.writeText(code.userCode).then(
             () => announce('Code copied. Paste it on GitHub.'),
             () => {},
+          );
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          ask({ type: 'gitchop:signin:device' }).then(
+            (reply) => {
+              if (!reply?.opened) window.open(open.href, '_blank', 'noreferrer');
+            },
+            () => window.open(open.href, '_blank', 'noreferrer'),
           );
         });
       } else {

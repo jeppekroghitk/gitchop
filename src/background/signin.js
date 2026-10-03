@@ -175,7 +175,39 @@ async function poll() {
   // Not kept: called off meanwhile, and the session there now, if any, is a new flow's.
   if (!(await keepSignIn(outcome.pair, session.replaceId, generation))) return called();
   await clearSignIn();
+  await leaveDevicePage(session);
   return { status: 'done', interval: session.interval, error: null, state: await state() };
+}
+
+/**
+ * Opens GitHub's device page for the flow under way, from the tab that asked, and remembers the tab
+ * so a finished sign-in can close it: GitHub's page ends on a "you're all set" the user would
+ * otherwise have to close by hand. Opening a tab and later closing the one opened needs no
+ * permission in either browser.
+ * @param {number | undefined} openerTabId
+ * @returns {Promise<{ opened: boolean }>}
+ */
+export async function openDevicePage(openerTabId) {
+  const session = await readSession();
+  if (!session) return { opened: false };
+  const url = session.verificationUri;
+  const tab = /** @type {WebExt.Tab | undefined} */ (await api.tabs.create(openerTabId === undefined ? { url } : { url, openerTabId }));
+  const latest = await readSession();
+  if (latest && latest.deviceCode === session.deviceCode) {
+    await writeSession({ ...latest, deviceTabId: tab?.id, openerTabId });
+  }
+  return { opened: true };
+}
+
+/**
+ * Back to where the sign-in started: that tab to the front, and GitHub's device page closed. Either
+ * may be gone already — the user closed it, or never opened it through gitchop — which is fine.
+ * @param {SignInSession} session
+ */
+async function leaveDevicePage(session) {
+  if (session.deviceTabId === undefined) return;
+  if (session.openerTabId !== undefined) await api.tabs.update(session.openerTabId, { active: true }).catch(() => {});
+  await api.tabs.remove(session.deviceTabId).catch(() => {});
 }
 
 /** @returns {Promise<SignInPoll>} */
