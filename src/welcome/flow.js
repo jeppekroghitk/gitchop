@@ -199,6 +199,11 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   let handedOff = false;
   /** Back from that page without the question answered yes. */
   let notYet = false;
+  /**
+   * The browser's question is a step of its own, ahead of the sign-in, wherever it has to be asked
+   * on a page of its own: the sign-in that follows it is the next step, not the same one again.
+   */
+  let asksFirst = at === 'consent';
 
   const root = el('div', 'gw');
   root.dataset.variant = variant;
@@ -243,18 +248,26 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
    * The few steps of the sign-in, as marks in the head: which one this is, of how many. None on the
    * first screen, which is not a step, nor at the end of the way without a sign-in. Organisations
    * passed by with "Skip for now" are marked skipped, not done.
-   * @param {number | null} step
+   * @param {'allow' | 'signin' | 'orgs' | 'ready' | null} step
    */
   function paintSteps(step) {
     stepsEl.textContent = '';
     stepsEl.hidden = step === null;
     if (step === null) return;
-    const names = ['Sign in', 'Organisations', 'Ready'];
-    stepsEl.setAttribute('aria-label', `Step ${step} of ${names.length}`);
-    names.forEach((name, index) => {
+    /** @type {['allow' | 'signin' | 'orgs' | 'ready', string][]} */
+    const all = [
+      ['allow', 'Allow'],
+      ['signin', 'Sign in'],
+      ['orgs', 'Organisations'],
+      ['ready', 'Ready'],
+    ];
+    const steps = asksFirst ? all : all.slice(1);
+    const here = steps.findIndex(([key]) => key === step);
+    stepsEl.setAttribute('aria-label', `Step ${here + 1} of ${steps.length}`);
+    steps.forEach(([key, name], index) => {
       const item = el('li', 'gw-step', name);
-      item.dataset.state = index + 1 < step ? (index === 1 && orgsSkipped ? 'skipped' : 'done') : index + 1 === step ? 'current' : 'todo';
-      if (index + 1 === step) item.setAttribute('aria-current', 'step');
+      item.dataset.state = index < here ? (key === 'orgs' && orgsSkipped ? 'skipped' : 'done') : index === here ? 'current' : 'todo';
+      if (index === here) item.setAttribute('aria-current', 'step');
       stepsEl.append(item);
     });
   }
@@ -401,7 +414,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
    * and nothing else, one click that asks it.
    */
   function consentScreen() {
-    paintSteps(1);
+    paintSteps('allow');
     if (!overlay) {
       const allow = button('Allow', begin, { primary: true });
       allow.classList.add('gw-btn-big');
@@ -466,7 +479,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   }
 
   function signInScreen() {
-    paintSteps(1);
+    paintSteps('signin');
     if (!flow || flow.phase === 'starting' || flow.phase === 'code') {
       const code = flow?.phase === 'code' && flow.code ? flow.code : null;
       const open = linkButton('Open GitHub', code?.verificationUri ?? DEVICE_URL, { primary: true });
@@ -524,7 +537,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   }
 
   function accessScreen() {
-    paintSteps(2);
+    paintSteps('orgs');
     const app = appEntry(sync);
     const title = el('h1', 'gw-title', 'Give gitchop access to your organisations');
     const who = el('p', 'gw-lede');
@@ -573,7 +586,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
    * thing, one Enter away.
    */
   function readyScreen() {
-    paintSteps(skipped ? null : 3);
+    paintSteps(skipped ? null : 'ready');
     if (overlay) {
       const go = button('Open the menu', () => onMenu?.(), { primary: true });
       go.classList.add('gw-btn-big');
@@ -649,6 +662,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   /** The overlay opens the page at the question, and stays, waiting for the user to be back. */
   function handOff() {
     handedOff = true;
+    asksFirst = true;
     notYet = false;
     onElsewhere?.();
     render({ focus: true });
