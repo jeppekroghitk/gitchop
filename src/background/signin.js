@@ -1,9 +1,10 @@
 import { api } from '../lib/links.js';
 import { identify } from '../lib/gist.js';
-import { listInstallations, pollToken, requestCode } from '../lib/signin.js';
+import { INSTALL_URL, listInstallations, pollToken, requestCode } from '../lib/signin.js';
 import { seal } from '../lib/vault.js';
 import { forgetRenewal, noteAppSecret } from './app-token.js';
 import { ensureVaultKey, newId, readConfig, state, updateConfig } from './config.js';
+import { INSTALL_TAB_KEY } from './keys.js';
 import { rememberScope } from './rate.js';
 import { SIGNIN_ALARM, clearSignIn, endSignIn, readSession, sessionGeneration, writeSession } from './signin-session.js';
 import { loadTokens, updateTokens } from './tokens.js';
@@ -33,8 +34,10 @@ export { SIGNIN_ALARM };
 /**
  * One poll's answer. `network` is GitHub out of reach, which is not the end of the code; `none` is
  * no flow under way here, because another tab finished it or it was cancelled. `state` comes with
- * the answers that change what the token card shows.
- * @typedef {{ status: PollStatus | 'network' | 'none', interval: number, error: string | null, state: SyncState | null }} SignInPoll
+ * the answers that change what the token card shows. `early` marks a `pending` that GitHub was not
+ * asked for, because its interval had not run yet, so it says nothing about whether the user has
+ * approved.
+ * @typedef {{ status: PollStatus | 'network' | 'none', interval: number, error: string | null, state: SyncState | null, early?: boolean }} SignInPoll
  */
 
 /** A code is handed back rather than replaced while it has at least this long left. */
@@ -145,7 +148,7 @@ async function poll() {
     await clearSignIn();
     return { status: 'expired', interval: session.interval, error: null, state: null };
   }
-  if (at < session.nextPollAt) return { status: 'pending', interval: session.interval, error: null, state: null };
+  if (at < session.nextPollAt) return { status: 'pending', interval: session.interval, error: null, state: null, early: true };
 
   /** @type {import('../lib/signin.js').PollOutcome} */
   let outcome;
@@ -173,7 +176,39 @@ async function poll() {
   // Not kept: called off meanwhile, and the session there now, if any, is a new flow's.
   if (!(await keepSignIn(outcome.pair, session.replaceId, generation))) return called();
   await clearSignIn();
+  await leaveDevicePage(session);
   return { status: 'done', interval: session.interval, error: null, state: await state() };
+}
+
+/**
+ * Opens GitHub's device page for the flow under way, from the tab that asked, and remembers the tab
+ * so a finished sign-in can close it: GitHub's page ends on a "you're all set" the user would
+ * otherwise have to close by hand. Opening a tab and later closing the one opened needs no
+ * permission in either browser.
+ * @param {number | undefined} openerTabId
+ * @returns {Promise<{ opened: boolean }>}
+ */
+export async function openDevicePage(openerTabId) {
+  const session = await readSession();
+  if (!session) return { opened: false };
+  const url = session.verificationUri;
+  const tab = /** @type {WebExt.Tab | undefined} */ (await api.tabs.create(openerTabId === undefined ? { url } : { url, openerTabId }));
+  const latest = await readSession();
+  if (latest && latest.deviceCode === session.deviceCode) {
+    await writeSession({ ...latest, deviceTabId: tab?.id, openerTabId });
+  }
+  return { opened: true };
+}
+
+/**
+ * Back to where the sign-in started: that tab to the front, and GitHub's device page closed. Either
+ * may be gone already — the user closed it, or never opened it through gitchop — which is fine.
+ * @param {SignInSession} session
+ */
+async function leaveDevicePage(session) {
+  if (session.deviceTabId === undefined) return;
+  if (session.openerTabId !== undefined) await api.tabs.update(session.openerTabId, { active: true }).catch(() => {});
+  await api.tabs.remove(session.deviceTabId).catch(() => {});
 }
 
 /** @returns {Promise<SignInPoll>} */
@@ -246,6 +281,45 @@ async function keepSignIn(pair, replaceId, generation) {
     ),
   );
   return true;
+}
+
+/**
+ * In memory where storage.session is switched off, for as long as the background lasts.
+ * @type {{ tabId?: number, openerTabId?: number } | null}
+ */
+let installTabFallback = null;
+
+/**
+ * Opens GitHub's page for installing the app, from the tab that asked, and remembers both tabs:
+ * GitHub ends an install on the installation's settings, which the user would otherwise have to
+ * leave by hand to get back.
+ * @param {number | undefined} openerTabId
+ * @returns {Promise<{ opened: boolean }>}
+ */
+export async function openInstallPage(openerTabId) {
+  const tab = /** @type {WebExt.Tab | undefined} */ (await api.tabs.create(openerTabId === undefined ? { url: INSTALL_URL } : { url: INSTALL_URL, openerTabId }));
+  const record = { tabId: tab?.id, openerTabId };
+  if (api.storage.session) await api.storage.session.set({ [INSTALL_TAB_KEY]: record });
+  else installTabFallback = record;
+  return { opened: true };
+}
+
+/**
+ * The content script, on the page GitHub ends an install on, says so. Only the tab gitchop opened
+ * for it is acted on: the installations are asked again, the tab the user came from comes back to
+ * the front, and the install page is closed. Any other visit to that page is left alone.
+ * @param {number | undefined} tabId
+ * @returns {Promise<{ closed: boolean }>}
+ */
+export async function installLanded(tabId) {
+  const stored = api.storage.session ? (await api.storage.session.get(INSTALL_TAB_KEY))[INSTALL_TAB_KEY] : installTabFallback;
+  if (!stored || tabId === undefined || stored.tabId !== tabId) return { closed: false };
+  if (api.storage.session) await api.storage.session.remove(INSTALL_TAB_KEY);
+  else installTabFallback = null;
+  await refreshInstallations().catch(() => {});
+  if (stored.openerTabId !== undefined) await api.tabs.update(stored.openerTabId, { active: true }).catch(() => {});
+  await api.tabs.remove(tabId).catch(() => {});
+  return { closed: true };
 }
 
 /**

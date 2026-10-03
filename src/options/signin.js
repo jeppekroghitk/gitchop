@@ -1,6 +1,7 @@
 import { loadLinks } from '../lib/links.js';
 import { ownersFromLinks } from '../lib/repos.js';
 import { INSTALL_URL, REVOKE_URL } from '../lib/signin.js';
+import { openThroughBackground } from '../lib/messages.js';
 import { afterLostPoll, afterPoll, appEntry, countdown, endedLine, ending, minutesLeft, ownerReach, requestAccess, statusLine } from '../lib/signin-flow.js';
 
 /** @import { Answer, Message, MessageType } from '../background/messages.js' */
@@ -512,7 +513,7 @@ function unknownAccess(hooks) {
   again.addEventListener('click', () => askAgain(again, hooks));
   const lead = say(installError ? 'Could not check where gitchop is installed.' : 'Not checked yet where gitchop is installed.', 'signin-status');
   if (installError) lead.append(element('span', 'flow-reason', installError));
-  return stepItem({ number: 2, state: installError ? 'warn' : 'current', title, body: [lead, actionRow(again, linkButton('Install on GitHub', INSTALL_URL))] });
+  return stepItem({ number: 2, state: installError ? 'warn' : 'current', title, body: [lead, actionRow(again, openThroughBackground(linkButton('Install on GitHub', INSTALL_URL), 'gitchop:install:open'))] });
 }
 
 /**
@@ -555,7 +556,7 @@ function accessStep(sync, app, hooks) {
       number: 2,
       state: 'done',
       title: reachTitle(reached),
-      aside: [quiet('Manage on GitHub', INSTALL_URL)],
+      aside: [openThroughBackground(/** @type {HTMLAnchorElement} */ (quiet('Manage on GitHub', INSTALL_URL)), 'gitchop:install:open')],
       body: [names],
     });
   }
@@ -571,7 +572,7 @@ function accessStep(sync, app, hooks) {
     if (own) detail = `your account, ${detail}`;
     list.append(ownerRow(owner, 'out', detail, own ? null : hooks));
   }
-  const install = linkButton('Install on GitHub', INSTALL_URL, { primary: true });
+  const install = openThroughBackground(linkButton('Install on GitHub', INSTALL_URL, { primary: true }), 'gitchop:install:open');
   return stepItem({
     number: 2,
     state: 'current',

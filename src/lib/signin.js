@@ -226,6 +226,10 @@ export async function refreshPair(refreshToken, at = Date.now()) {
  */
 export async function listInstallations(token) {
   const response = await fetch(`${API}/user/installations?per_page=100`, {
+    // GitHub lets this be cached for a minute, and it is asked right after the user installs the
+    // app: a cached answer would say the install never happened. Revalidated instead, which an
+    // unchanged list answers with a 304 that costs no rate limit.
+    cache: 'no-cache',
     headers: {
       Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${token}`,

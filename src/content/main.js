@@ -125,9 +125,19 @@ function install() {
     } catch {
       /* not owed: the menu is always the safe answer */
     }
-    if (read === owedRead) owed = next;
+    if (read !== owedRead) return;
+    // Owed again after the menu was shown here — the sign-in was lost meanwhile — the next press
+    // greets in this tab too, rather than waiting for a reload.
+    if (next && owed === false) menuSeen = false;
+    owed = next;
   }
   readOwed();
+
+  // GitHub ends an install of gitchop's app on the installation's settings. Said only from there,
+  // so no other page wakes the background; it closes the tab only if it opened it for the install.
+  if (/^\/(?:organizations\/[^/]+\/)?settings\/installations\/\d+\/?$/.test(location.pathname)) {
+    ask({ type: 'gitchop:install:landed' });
+  }
   try {
     api.storage.onChanged.addListener((changes, area) => {
       if (area === 'local' && (changes[WELCOMED_KEY] || changes[CONFIG_KEY])) readOwed();
