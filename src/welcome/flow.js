@@ -382,9 +382,8 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     if (screen === 'consent') return overlay ? [button('Continue without signing in', skip, { quiet: true })] : [button('Not now', notNow, { quiet: true })];
     if (screen === 'signin') return flow?.phase === 'disabled' || connectedAs ? [] : [button('Continue without signing in', skip, { quiet: true })];
     if (screen === 'access') {
-      const app = appEntry(sync);
-      const done = app && app.installations && reachedAll(app);
-      return done ? [] : [button('Skip for now', finish, { quiet: true })];
+      // The screen's own Later is the way past it; a second one down here would only compete.
+      return [];
     }
     if (overlay) return [];
     // Put aside, the sign-in is still one click away, in the same words the menu's quiet row uses.
@@ -583,9 +582,13 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   function accessScreen() {
     paintSteps('orgs');
     const app = appEntry(sync);
-    const title = el('h1', 'gw-title', 'Give gitchop access to your organisations');
-    const who = el('p', 'gw-lede');
-    who.append('Signed in', app?.login ? ` as @${app.login}` : '', '. gitchop sees private repositories only in the accounts you install it on, and only reads them.');
+    const title = el('h1', 'gw-title', 'Add gitchop to your organisations');
+    // Why an app, and why per organisation: without it the step reads as a chore with no reason.
+    const who = el(
+      'p',
+      'gw-lede',
+      'gitchop only sees private repositories in accounts its GitHub app is added to. Add it to your organisations to search their repositories and follow their pull requests.',
+    );
     if (!app) return [title, who];
 
     if (app.installations === null || app.installations === undefined) {
@@ -613,15 +616,21 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
       list.append(ownerRow(owner, 'out', detail));
     }
 
-    if (reachedAll(app)) {
-      return [title, who, list, actions(button('Continue', finish, { primary: true }), openThroughBackground(linkButton('Manage on GitHub', INSTALL_URL), 'gitchop:install:open'))];
-    }
+    // Two ways on, side by side: add the app now, or later from Settings. GitHub does not tell a
+    // sign-in which organisations the user is in, so once one is added, going on is what is left
+    // to offer first; until then, adding one is.
+    const someOrg = installs.some((install) => install.type === 'Organization');
+    const add = openThroughBackground(
+      linkButton(someOrg ? 'Add another organisation' : 'Add organisations', INSTALL_URL, { primary: !someOrg }),
+      'gitchop:install:open',
+    );
+    const go = button(someOrg ? 'Continue' : 'Later', finish, { primary: someOrg });
     return [
       title,
       who,
       list,
-      actions(openThroughBackground(linkButton('Install on GitHub', INSTALL_URL, { primary: true }), 'gitchop:install:open')),
-      el('p', 'gw-fine', 'GitHub asks which accounts and repositories. In an organisation, an owner may need to approve.'),
+      actions(...(someOrg ? [go, add] : [add, go])),
+      el('p', 'gw-fine', 'You can add organisations any time from Settings. In one you do not own, GitHub asks an owner to approve.'),
     ];
   }
 
