@@ -513,6 +513,8 @@
         rateLeft[key] = Math.max(0, rateLeft[key] - points);
         notify({ rateCache: { newValue: { ...rateLeft } } }, 'local');
       }
+      let welcomed = false;
+      let consented = false;
       window.browser = window.chrome = {
         runtime: {
           lastError: undefined,
@@ -523,8 +525,25 @@
               openSettings();
               return { ok: true };
             }
-            if (message.type === 'gitchop:welcome') return { ok: true, hint: sync.tokens.length === 0 && !store.hintDismissed };
-            if (message.type === 'gitchop:welcome:open') return { ok: true };
+            // ?welcome=first: a profile that has not been welcomed, so the first press shows the welcome.
+            if (message.type === 'gitchop:welcome') return { ok: true, first: params.get('welcome') === 'first' && sync.tokens.length === 0 && !welcomed, hint: sync.tokens.length === 0 && !store.hintDismissed };
+            // The page opened at the browser's question: here it answers yes at once, so the
+            // overlay finds access granted when the harness tab is shown again.
+            if (message.type === 'gitchop:welcome:open') {
+              if (message.at === 'consent') consented = true;
+              return { ok: true };
+            }
+            if (message.type === 'gitchop:welcome:done') {
+              welcomed = true;
+              notify({ welcomed: { newValue: true } }, 'local');
+              return { ok: true };
+            }
+            // ?access=elsewhere: a Firefox without the consent to hold a token yet.
+            if (message.type === 'gitchop:signin:access') return { ok: true, granted: params.get('access') !== 'elsewhere' || consented };
+            // The device flow, never reaching GitHub: a code that stays pending until it runs out.
+            if (message.type === 'gitchop:signin:pending') return { ok: true, code: null };
+            if (message.type === 'gitchop:signin:start') return { ok: true, userCode: 'WDJB-MJHT', verificationUri: 'https://github.com/login/device', expiresAt: new Date(Date.now() + 900000).toISOString(), interval: 5 };
+            if (message.type === 'gitchop:signin:poll') return { ok: true, status: 'pending', interval: 5, error: null, state: null };
             if (message.type === 'gitchop:welcome:hint:dismiss') {
               store.hintDismissed = true;
               return { ok: true };
@@ -608,6 +627,9 @@
           },
         },
         storage: {
+          local: {
+            get: async () => (welcomed ? { welcomed: true } : {}),
+          },
           sync: {
             get: async () => JSON.parse(JSON.stringify(store)),
             // Notifies like the real API, so the content script's effects cache follows the settings page.

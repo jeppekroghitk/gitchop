@@ -23,7 +23,7 @@
  *
  * Usage: node dev/bundle.mjs
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
@@ -88,6 +88,26 @@ const bundledElsewhere = {
 };
 
 /**
+ * What the pages under src/ load by a src or href of their own — the welcome's stylesheet, which
+ * the content script also takes in as text for the overlay — as repository paths. The import graph
+ * cannot see these, and a page needs them loose whatever a bundle carries.
+ */
+function linkedFromPages(dir = path.join(root, 'src')) {
+  const found = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) found.push(...linkedFromPages(full));
+    else if (entry.name.endsWith('.html')) {
+      for (const [, attribute] of readFileSync(full, 'utf8').matchAll(/(?:src|href)="([^"]+)"/g)) {
+        if (/^(?:[a-z]+:|\/\/|#|data:)/i.test(attribute)) continue;
+        found.push(path.relative(root, path.join(dir, attribute.split(/[?#]/)[0])).split(path.sep).join('/'));
+      }
+    }
+  }
+  return found;
+}
+
+/**
  * Every bundle, and the files that reach the browser only inside one, which a package therefore
  * need not carry loose: each input of a bundle that no loose module also imports. Worked out from
  * the import graph rather than listed, so a module that moves between the two is packaged the
@@ -105,7 +125,7 @@ export async function bundleAll() {
     logLevel: 'silent',
     plugins: [bundledElsewhere],
   });
-  const loose = new Set(Object.keys(graph.metafile.inputs));
+  const loose = new Set([...Object.keys(graph.metafile.inputs), ...linkedFromPages()]);
   const bundles = await Promise.all(BUNDLES.map(async (spec) => ({ ...spec, ...(await bundle(spec)) })));
   const only = new Set(bundles.flatMap((built) => built.inputs).filter((input) => !loose.has(input)));
   return { bundles, only };

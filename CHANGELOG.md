@@ -5,11 +5,20 @@ it from.
 
 ## Unreleased
 
-- A welcome page opens on install: the <kbd>.</kbd> key, **Sign in with GitHub** carried out on the
-  page itself, the organisations to install the app on, and **Continue without signing in**. The
-  toolbar button opens it instead of Settings until you sign in, save a token or put it aside, and
-  the menu ends in a quiet *Sign in to search your private repositories* row, with a ✕ to hide it,
-  while nothing is signed in. Updates open nothing.
+- A welcome for new users, shown the first time you press <kbd>.</kbd> on GitHub: the chop plays,
+  and the welcome takes the menu's place in the overlay — what signing in unlocks, **Sign in with
+  GitHub** carried out right there (the code, GitHub's device page in a new tab, the organisations to
+  install the app on), and **Continue without signing in**, which drops straight into the menu.
+  Escape puts it aside too; once put aside or signed in, it never shows again. Nothing opens on
+  install. The same welcome, drawn by the same code, has a page of its own: the toolbar button opens
+  it instead of Settings until you sign in, save a token or put it aside. While nothing is signed in,
+  the menu ends in a quiet *Sign in to search your private repositories* row, with a ✕ to hide it;
+  it starts the sign-in in the overlay. On Firefox, until the consent to hold a token has been given,
+  the overlay says why a tab is needed and, on a click, opens one at that question alone; once it is
+  answered the tab closes itself and the sign-in carries on in the overlay. An **esc** button in the
+  corner closes the welcome; Escape or closing it calls off a code on screen. Updating from 2.9 or
+  older counts as welcomed, as does a first sign-in or token, so the welcome never replaces a menu
+  someone already uses.
 - Sign in with GitHub ([#17](https://github.com/jeppekroghitk/gitchop/issues/17)). Settings shows a
   short code to approve at github.com/login/device, and gitchop is signed in through its own GitHub
   App, *gitchop for GitHub*: read-only on repositories, Gists for the backup, and only where the app

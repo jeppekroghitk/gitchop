@@ -15,7 +15,7 @@ import { PULLS_ALARM, refreshPulls, schedulePulls } from './pulls.js';
 import { SIGNIN_ALARM, pollSignIn } from './signin.js';
 import { noteBackedUpChange, pull } from './sync.js';
 import { sealLegacyTokens } from './tokens.js';
-import { openFromToolbar, openWelcome } from './welcome.js';
+import { markWelcomed, openFromToolbar, welcomeOnUpdate } from './welcome.js';
 
 /**
  * The gist is the durable copy; storage.sync is the working copy the menu reads, so the menu opens
@@ -34,13 +34,14 @@ import { openFromToolbar, openWelcome } from './welcome.js';
 
 api.runtime.onMessage.addListener(answer);
 
-api.runtime.onInstalled.addListener(async ({ reason }) => {
+api.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
   if (reason === 'install') {
+    // Nothing opens on install: a new user meets the welcome the first time they press the key on
+    // GitHub, inside the overlay (src/background/welcome.js says where else it is shown).
     const existing = await loadLinks();
     if (existing.length === 0) await saveLinks(withIds(DEFAULT_LINKS));
-    // A first install only, never an update: the welcome is the one page that says what the key does.
-    openWelcome().catch(() => {});
   }
+  if (reason === 'update') await welcomeOnUpdate(previousVersion).catch(() => {});
   pull().catch(() => {});
   schedulePulls();
   scheduleNews();
@@ -90,6 +91,11 @@ api.storage.onChanged.addListener((changes, area) => {
       hasUsableToken(changes[CONFIG_KEY].oldValue) !== hasUsableToken(changes[CONFIG_KEY].newValue));
   if ((area === 'sync' && changes[PULLS_SETTINGS_KEY]) || tokensChanged) {
     schedulePulls().then(() => paintAction()).catch(() => {});
+  }
+  // A first sign-in or token, wherever it was made, is the welcome done: taking every token away
+  // later leaves a user who knows gitchop, not a new one.
+  if (area === 'local' && changes[CONFIG_KEY] && (changes[CONFIG_KEY].oldValue?.tokens?.length ?? 0) === 0 && (changes[CONFIG_KEY].newValue?.tokens?.length ?? 0) > 0) {
+    markWelcomed().catch(() => {});
   }
   // The subscriptions and the hour travel with the profile too, so an edit on another machine
   // re-arms the alarm here.

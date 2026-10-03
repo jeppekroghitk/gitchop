@@ -1,15 +1,18 @@
 import { api } from '../lib/links.js';
-import { WELCOME_PAGE, opensWelcome, showsMenuHint } from '../lib/welcome.js';
+import { CONSENT_HASH, WELCOME_PAGE, opensWelcome, predatesWelcome, showsMenuHint } from '../lib/welcome.js';
 import { readConfig } from './config.js';
 import { HINT_KEY, WELCOMED_KEY } from './keys.js';
 
 /** @import { WelcomeFacts } from '../lib/welcome.js' */
 
 /**
- * Where the welcome is opened from: a new tab on install, the toolbar button until the user has
- * signed in or put the welcome aside, and the menu's quiet sign-in row, which cannot open an
- * extension page itself from a content script in every browser. tabs.create needs no permission
- * in either browser when it only opens a page and reads nothing back.
+ * Where the welcome is shown from. Nothing opens on install: the "." overlay shows it the first
+ * time the key is pressed on GitHub, from what welcomeState says. Its page of its own opens from
+ * the toolbar button until the user has signed in or put the welcome aside, and from the overlay,
+ * at the browser's question alone, when signing in needs a prompt only an extension page can
+ * show. tabs.create needs no permission in either browser when it only opens a page and reads
+ * nothing back. A first sign-in or token counts as welcomed for good (see index.js), so taking
+ * every token away later does not bring the welcome back.
  */
 
 /** @returns {Promise<WelcomeFacts>} */
@@ -23,16 +26,25 @@ export async function welcomeFacts() {
 }
 
 /**
- * What the menu is told: whether to end in the sign-in row.
- * @returns {Promise<{ hint: boolean }>}
+ * What the content script is told: whether the next press shows the welcome in place of the
+ * menu, and whether the menu ends in the sign-in row.
+ * @returns {Promise<{ first: boolean, hint: boolean }>}
  */
 export async function welcomeState() {
-  return { hint: showsMenuHint(await welcomeFacts()) };
+  const facts = await welcomeFacts();
+  return { first: opensWelcome(facts), hint: showsMenuHint(facts) };
 }
 
-/** @returns {Promise<{}>} */
-export async function openWelcome() {
-  await api.tabs.create({ url: api.runtime.getURL(WELCOME_PAGE) });
+/**
+ * The welcome's page. From the overlay it opens at the browser's question alone, as a child of
+ * the GitHub tab that asked, so once it is answered the page can hand the user back to that tab,
+ * where the sign-in carries on.
+ * @param {{ at?: 'consent', openerTabId?: number }} [options]
+ * @returns {Promise<{}>}
+ */
+export async function openWelcome({ at, openerTabId } = {}) {
+  const url = api.runtime.getURL(WELCOME_PAGE) + (at === 'consent' ? CONSENT_HASH : '');
+  await api.tabs.create(openerTabId === undefined ? { url } : { url, openerTabId });
   return {};
 }
 
@@ -46,6 +58,36 @@ export async function markWelcomed() {
 export async function dismissMenuHint() {
   await api.storage.local.set({ [HINT_KEY]: true });
   return {};
+}
+
+/**
+ * Whether the overlay can sign in without a prompt: a content script cannot ask for permissions,
+ * so the hosts — and on Firefox the consent to hold a token, which src/lib/signin-flow.js asks
+ * for beside them — must be granted already. Otherwise the overlay hands the sign-in to the
+ * welcome's page, where the click can ask. Firefox is told apart by runtime.getBrowserInfo, as
+ * there. A Chrome that cannot answer is let through, since startSignIn checks the host again; a
+ * Firefox that cannot is not, since nothing later checks the consent: the page asks, and if the
+ * question cannot be answered there either, the page carries the sign-in out itself.
+ * @returns {Promise<{ granted: boolean }>}
+ */
+export async function signInAccess() {
+  const firefox = typeof api.runtime.getBrowserInfo === 'function';
+  try {
+    if (!(await api.permissions.contains({ origins: ['https://github.com/*', 'https://api.github.com/*'] }))) return { granted: false };
+    if (!firefox) return { granted: true };
+    return { granted: await api.permissions.contains({ data_collection: ['authenticationInfo'] }) };
+  } catch {
+    return { granted: !firefox };
+  }
+}
+
+/**
+ * Whoever updates from a version without the welcome is welcomed already: their next press stays
+ * the menu they know. The sign-in row is left to show, the one new thing they see.
+ * @param {string | undefined} previousVersion
+ */
+export async function welcomeOnUpdate(previousVersion) {
+  if (predatesWelcome(previousVersion)) await markWelcomed();
 }
 
 /** The toolbar button: the welcome for someone who has not been through it, Settings otherwise. */

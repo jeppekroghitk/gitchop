@@ -52,14 +52,14 @@ globalThis.fetch = async () => new Response('{"message":"Not Found"}', { status:
 
 await import('../src/background/index.js');
 // After the stand-in, like the entry: src/lib/links.js reads the browser off globalThis as it loads.
-const { opensWelcome, showsMenuHint } = await import('../src/lib/welcome.js');
+const { onPress, opensWelcome, predatesWelcome, showsMenuHint } = await import('../src/lib/welcome.js');
 const { afterLostPoll, afterPoll, countdown, ownerReach } = await import('../src/lib/signin-flow.js');
 
 const WELCOME = 'chrome-extension://gitchop/src/welcome/welcome.html';
 
-function send(message) {
+function send(message, sender = {}) {
   return new Promise((resolve) => {
-    const answered = listeners['runtime.onMessage'][0](message, {}, resolve);
+    const answered = listeners['runtime.onMessage'][0](message, sender, resolve);
     if (!answered) resolve(undefined);
   });
 }
@@ -78,18 +78,92 @@ function reset() {
 
 const someToken = { tokens: [{ id: 't1', kind: 'fine-grained', login: 'me', scopes: [], owners: null, target: null, expiresAt: null, sealed: 'x' }] };
 
-test('a first install opens the welcome in a new tab, and seeds the links', async () => {
+test('a first install opens nothing, and seeds the links', async () => {
   reset();
   await listeners['runtime.onInstalled'][0]({ reason: 'install' });
-  assert.deepEqual(tabs, [{ url: WELCOME }], 'one tab, on the welcome page');
+  assert.deepEqual(tabs, [], 'no tab: the welcome waits for the first press of the key on GitHub');
+  assert.equal(optionsOpened, 0, 'nor Settings');
   assert.ok(Array.isArray(sync.data.links) && sync.data.links.length > 0, 'the default links are there to press the dot for');
 });
 
-test('an update opens nothing', async () => {
+test('the first press is owed the welcome until there is a sign-in, a token or it was put aside', async () => {
   reset();
-  await listeners['runtime.onInstalled'][0]({ reason: 'update', previousVersion: '2.8.0' });
+  assert.equal((await send({ type: 'gitchop:welcome' })).first, true, 'a fresh profile: the welcome, in place of the menu');
+
+  // Escape, or Continue without signing in, or the end of the welcome: each sends this.
+  assert.deepEqual(await send({ type: 'gitchop:welcome:done' }), { ok: true });
+  assert.equal(local.data.welcomed, true, 'the mark the content script reads straight from storage');
+  assert.equal((await send({ type: 'gitchop:welcome' })).first, false, 'put aside: the next press is the menu, for good');
+
+  reset();
+  local.data.sync = structuredClone(someToken);
+  assert.equal((await send({ type: 'gitchop:welcome' })).first, false, 'a token saved: never the welcome');
+
+  reset();
+  local.data.sync = { tokens: [{ ...someToken.tokens[0], kind: 'app', needsSignIn: true }] };
+  assert.equal((await send({ type: 'gitchop:welcome' })).first, false, 'a sign-in GitHub has since refused still counts');
+});
+
+test('the overlay signs in where it is when nothing is left to prompt for, and hands it to the page otherwise', async () => {
+  const { contains } = globalThis.chrome.permissions;
+  try {
+    assert.deepEqual(await send({ type: 'gitchop:signin:access' }), { ok: true, granted: true }, 'Chrome, hosts granted');
+
+    globalThis.chrome.permissions.contains = async (set) => !set.origins;
+    assert.deepEqual(await send({ type: 'gitchop:signin:access' }), { ok: true, granted: false }, 'hosts missing: the page, which can ask');
+
+    globalThis.chrome.runtime.getBrowserInfo = async () => ({ name: 'Firefox', version: '140.0' });
+    globalThis.chrome.permissions.contains = async (set) => !set.data_collection;
+    assert.deepEqual(await send({ type: 'gitchop:signin:access' }), { ok: true, granted: false }, 'Firefox without consent to hold a token: the page');
+
+    globalThis.chrome.permissions.contains = async () => true;
+    assert.deepEqual(await send({ type: 'gitchop:signin:access' }), { ok: true, granted: true }, 'Firefox with both');
+
+    globalThis.chrome.permissions.contains = async () => {
+      throw new Error('no such key');
+    };
+    assert.deepEqual(await send({ type: 'gitchop:signin:access' }), { ok: true, granted: false }, 'a Firefox that cannot answer is not let through: nothing later checks the consent');
+
+    delete globalThis.chrome.runtime.getBrowserInfo;
+    assert.deepEqual(await send({ type: 'gitchop:signin:access' }), { ok: true, granted: true }, 'a Chrome that cannot answer is; the background checks the host again');
+  } finally {
+    globalThis.chrome.permissions.contains = contains;
+    delete globalThis.chrome.runtime.getBrowserInfo;
+  }
+});
+
+test('an update opens nothing, and an update from before the welcome leaves the next press the menu', async () => {
+  reset();
+  await listeners['runtime.onInstalled'][0]({ reason: 'update', previousVersion: '2.9.0' });
   await listeners['runtime.onInstalled'][0]({ reason: 'browser_update' });
   assert.deepEqual(tabs, [], 'no tab on an update of gitchop or of the browser');
+  const after = await send({ type: 'gitchop:welcome' });
+  assert.equal(after.first, false, 'someone who has pressed the key for months gets the menu, not the welcome');
+  assert.equal(after.hint, true, 'the sign-in row is left to show, the one new thing they see');
+
+  reset();
+  await listeners['runtime.onInstalled'][0]({ reason: 'update', previousVersion: '2.10.0' });
+  assert.equal((await send({ type: 'gitchop:welcome' })).first, true, 'an update from a version with the welcome leaves it owed if it was');
+
+  reset();
+  await listeners['runtime.onInstalled'][0]({ reason: 'browser_update' });
+  assert.equal((await send({ type: 'gitchop:welcome' })).first, true, 'an update of the browser changes nothing');
+});
+
+test('a first sign-in or token is the welcome done, so taking every token away later does not bring it back', async () => {
+  reset();
+  const changed = (oldValue, newValue) => {
+    for (const listener of listeners['storage.onChanged']) listener({ sync: { oldValue, newValue } }, 'local');
+  };
+  changed(undefined, structuredClone(someToken));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(local.data.welcomed, true);
+  assert.equal((await send({ type: 'gitchop:welcome' })).first, false, 'no tokens now, but no welcome either');
+
+  reset();
+  changed(structuredClone(someToken), { tokens: [] });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(local.data.welcomed, undefined, 'a token leaving marks nothing');
 });
 
 test('the toolbar button opens the welcome until there is a sign-in, a token or the welcome was put aside', async () => {
@@ -131,10 +205,27 @@ test('the menu ends in the sign-in row while there is no token, until it is wave
   assert.equal((await send({ type: 'gitchop:welcome' })).hint, false, 'waved away: no row');
 });
 
-test('the menu’s row opens the welcome through the background', async () => {
+test('the overlay opens the welcome’s page at the browser’s question, as a child of the asking tab', async () => {
+  reset();
+  assert.deepEqual(await send({ type: 'gitchop:welcome:open', at: 'consent' }, { tab: { id: 7 } }), { ok: true });
+  assert.deepEqual(tabs, [{ url: `${WELCOME}#consent`, openerTabId: 7 }], 'the page goes back to tab 7 once it is answered');
+
   reset();
   assert.deepEqual(await send({ type: 'gitchop:welcome:open' }), { ok: true });
-  assert.deepEqual(tabs, [{ url: WELCOME }]);
+  assert.deepEqual(tabs, [{ url: WELCOME }], 'from no tab: the page from its beginning');
+});
+
+test('what a press decides, with nothing awaited', () => {
+  assert.equal(onPress({ owed: true, menuSeen: false }), 'welcome');
+  assert.equal(onPress({ owed: false, menuSeen: false }), 'menu');
+  assert.equal(onPress({ owed: null, menuSeen: false }), 'ask', 'not heard yet: the menu’s data, which carries the answer, decides');
+  assert.equal(onPress({ owed: true, menuSeen: true }), 'menu', 'never the welcome after the menu in the same tab');
+  assert.equal(onPress({ owed: null, menuSeen: true }), 'menu');
+});
+
+test('which updates come from before the welcome', () => {
+  for (const version of ['2.9.0', '2.9.3', '2.0.0', '1.4', undefined, 'nonsense']) assert.equal(predatesWelcome(version), true, String(version));
+  for (const version of ['2.10.0', '2.10.1', '2.11.0', '3.0.0']) assert.equal(predatesWelcome(version), false, version);
 });
 
 test('the rules on their own', () => {

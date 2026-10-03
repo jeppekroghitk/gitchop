@@ -93,9 +93,20 @@ declare namespace WebExt {
     onRemoved?: Event<(permissions: PermissionSet) => void>;
   }
 
+  /** The fields a tab has without the tabs permission: never its address or title. */
+  interface Tab {
+    id?: number;
+    openerTabId?: number;
+  }
+
   interface Tabs {
     /** Opening a page needs no permission in either browser; only reading tabs back does. */
-    create(properties: { url: string; active?: boolean }): Promise<unknown>;
+    create(properties: { url: string; active?: boolean; openerTabId?: number }): Promise<unknown>;
+    /** The tab an extension page is in; undefined anywhere else. */
+    getCurrent(): Promise<Tab | undefined>;
+    /** Bringing a tab to the front needs no permission. */
+    update(tabId: number, properties: { active?: boolean }): Promise<unknown>;
+    remove(tabId: number): Promise<void>;
   }
 
   interface Api {

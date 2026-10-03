@@ -125,7 +125,7 @@ export function createStage({ reduced = false, effects } = {}) {
    * itself has no box, so the compositor sees no blocking handler over the page and scrolls it
    * without asking.
    */
-  const SCROLLERS = '.gc-list, .gc-pop-card';
+  const SCROLLERS = '.gc-list, .gc-pop-card, .gw';
   const listCanScroll = (list, event) => {
     const room = list.scrollHeight - list.clientHeight;
     if (room <= 0) return false;
@@ -154,6 +154,7 @@ export function createStage({ reduced = false, effects } = {}) {
     host.addEventListener(type, keepKeys);
   }
 
+  /** @type {HTMLElement | null} */
   let panelEl = null;
   const live = [];
 
@@ -310,9 +311,12 @@ export function createStage({ reduced = false, effects } = {}) {
      * The beat between the blade leaving the screen and the menu rising is the one timing the
      * settings page owns outright (fx.panelAt) — the rest of the aftermath keeps its tuned
      * constants. Reduced motion and the off switch skip the wait entirely: there is no cut for
-     * the menu to rise into.
+     * the menu to rise into. `now` is for a panel that takes another's place once the cut is
+     * long open — the menu after the welcome — and rises without waiting on the blade.
+     * @param {HTMLElement} panel
+     * @param {{ now?: boolean }} [options]
      */
-    revealPanel(panel) {
+    revealPanel(panel, { now = false } = {}) {
       panelEl = panel;
       return track(
         panel,
@@ -323,7 +327,7 @@ export function createStage({ reduced = false, effects } = {}) {
         {
           duration: instant ? 90 : reduced ? 120 : 240,
           easing: EASE_SOFT,
-          delay: quick ? 0 : SWEEP * pace + fx.panelAt * afterPace,
+          delay: quick || now ? 0 : SWEEP * pace + fx.panelAt * afterPace,
         },
         ['opacity', 'transform'],
       ).finished.catch(() => {});
