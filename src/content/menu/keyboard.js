@@ -133,9 +133,10 @@ export function createKeyboard(menu) {
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
+      // From a column Escape closes gitchop, as it does from the links: stepping back to the
+      // panel first made it take two presses to leave from anywhere but the filter.
       if (state.form) menu.form.close();
-      else if (hasPanel && state.region !== 'panel') toPanel();
-      else if (!menu.list.leaveDrill()) menu.onClose();
+      else if (state.region !== 'panel' || !menu.list.leaveDrill()) menu.onClose();
       return;
     }
     // With a column on screen, Tab crosses the gutter — left to right, wrapping at the end, and
