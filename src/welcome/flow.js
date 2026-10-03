@@ -214,8 +214,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     close.title = 'Close (Esc)';
     topEnd.append(close);
   }
-  // The steps sit on the centre line the screens below are set on, not off in a corner.
-  top.append(wordmark('gw-wordmark'), stepsEl, topEnd);
+  top.append(wordmark('gw-wordmark'), topEnd);
   const screenEl = el('main', 'gw-screen');
   screenEl.tabIndex = -1;
   const bottomEl = el('footer', 'gw-bottom');
@@ -299,7 +298,8 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     const held = root.contains(scope.activeElement);
     screenEl.dataset.screen = screen;
     root.dataset.screen = screen;
-    screenEl.replaceChildren(...contents());
+    // The steps head the screen itself, right above its title, where the eye already is.
+    screenEl.replaceChildren(stepsEl, ...contents());
     bottomEl.replaceChildren(...footer());
     if (focus || (held && !root.contains(scope.activeElement))) focusPrimary();
   }
@@ -407,20 +407,20 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
       allow.classList.add('gw-btn-big');
       return [
         el('h1', 'gw-title', 'Allow gitchop to sign in'),
-        el('p', 'gw-lede', 'Your browser asks once before gitchop may hold a GitHub sign-in. Then you’re back on GitHub to finish.'),
+        el('p', 'gw-lede', 'Your browser needs your permission before gitchop can keep you signed in with GitHub.'),
         actions(allow),
       ];
     }
-    const open = button(handedOff ? 'Open it again' : 'Continue in a new tab', handOff, { primary: true });
+    const open = button('Ask again', handOff, { primary: true });
     const parts = [
-      el('h1', 'gw-title', 'Your browser asks first'),
-      el('p', 'gw-lede', 'Before gitchop may hold a GitHub sign-in, your browser asks you once, on gitchop’s own page. It opens in a new tab and brings you straight back here.'),
+      el('h1', 'gw-title', 'Allow gitchop to sign in'),
+      el('p', 'gw-lede', 'Your browser needs your permission before gitchop can keep you signed in with GitHub.'),
       actions(open),
     ];
-    if (notYet) parts.push(el('p', 'gw-notice', 'Not allowed yet. Ask again, or continue without signing in.'));
+    if (notYet) parts.push(el('p', 'gw-notice', 'Permission was not given. Ask again, or continue without signing in.'));
     else if (handedOff) {
       const waiting = el('p', 'gw-status');
-      waiting.append(el('span', 'gw-pulse'), el('span', 'gw-status-line', 'Waiting for your answer in the other tab…'));
+      waiting.append(el('span', 'gw-pulse'), el('span', 'gw-status-line', 'Waiting for your permission…'));
       parts.push(waiting);
     }
     return parts;
@@ -615,8 +615,14 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     const verdict = await access();
     if (gone) return;
     if (verdict === 'elsewhere') {
-      // Never a tab the user did not ask for: the screen says why one is needed, and the click opens it.
+      // The click on "Sign in with GitHub" goes straight to the browser's question, on gitchop's
+      // own page; asked again after a no, the screen here says so first.
       flow = null;
+      if (overlay && !handedOff) {
+        handOff();
+        go('consent');
+        return;
+      }
       notYet = handedOff;
       go('consent');
       return;

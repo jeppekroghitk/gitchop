@@ -52,10 +52,6 @@
   justify-self: start;
 }
 
-.gw-steps {
-  grid-column: 2;
-}
-
 .gw-top-end {
   grid-column: 3;
   justify-self: end;
@@ -117,8 +113,10 @@
 
 .gw-steps {
   display: flex;
-  gap: 20px;
+  align-items: center;
+  margin-bottom: 44px;
   list-style: none;
+  counter-reset: gw-step;
 }
 
 .gw-steps[hidden] {
@@ -126,9 +124,10 @@
 }
 
 .gw-step {
+  counter-increment: gw-step;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font: 600 11px/1 var(--gw-mono);
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -136,25 +135,43 @@
 }
 
 .gw-step::before {
-  content: "";
+  content: counter(gw-step);
   display: grid;
   place-items: center;
-  width: 14px;
-  height: 14px;
-  border: 1px solid var(--gw-line);
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--gw-edge);
   border-radius: 50%;
+  color: var(--gw-dim);
+  font: 600 11px/1 var(--gw-mono);
+  letter-spacing: 0;
+}
+
+.gw-step:not(:last-child)::after {
+  content: "";
+  width: 40px;
+  height: 1px;
+  margin: 0 14px 0 4px;
+  background: var(--gw-edge);
+}
+
+.gw-step[data-state="done"],
+.gw-step[data-state="skipped"] {
   color: var(--gw-soft);
-  font: 600 9px/1 var(--gw-sans);
 }
 
 .gw-step[data-state="done"]::before {
   content: "✓";
-  border-color: var(--gw-edge);
+  border-color: var(--gw-soft);
+  color: var(--gw-text);
+}
+
+.gw-step[data-state="done"]::after {
+  background: var(--gw-soft);
 }
 
 .gw-step[data-state="skipped"]::before {
   content: "–";
-  color: var(--gw-dim);
 }
 
 .gw-step[data-state="current"] {
@@ -163,7 +180,8 @@
 
 .gw-step[data-state="current"]::before {
   border-color: var(--gw-accent);
-  box-shadow: inset 0 0 0 3px var(--gw-bg), inset 0 0 0 7px var(--gw-accent);
+  background: var(--gw-accent);
+  color: var(--gw-bg);
 }
 
 .gw-screen {

@@ -15,8 +15,8 @@ it from.
   it instead of Settings until you sign in, save a token or put it aside. While nothing is signed in,
   the menu ends in a quiet *Sign in to search your private repositories* row, with a ✕ to hide it;
   it starts the sign-in in the overlay. On Firefox, until the consent to hold a token has been given,
-  the overlay says why a tab is needed and, on a click, opens one at that question alone; once it is
-  answered the tab closes itself and the sign-in carries on in the overlay. Escape or closing it
+  **Sign in with GitHub** opens a gitchop tab at that question alone; once it is answered the tab
+  closes itself and the sign-in carries on in the overlay. The steps, numbered, head each screen. Escape or closing it
   calls off a code on screen. Updating from 2.9 or
   older counts as welcomed, as does a first sign-in or token, so the welcome never replaces a menu
   someone already uses.
