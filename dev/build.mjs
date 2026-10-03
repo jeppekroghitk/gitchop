@@ -21,7 +21,7 @@
  *   changes; reload the extension in the browser to pick it up.
  */
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, watch, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, watch, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { bundleAll, root, writeHarnessCopy } from './bundle.mjs';
@@ -97,9 +97,13 @@ function prune(dir) {
  * The sources as they are, less whatever reaches the browser only inside a bundle, and then the
  * bundles themselves. A module the package no longer loads is not carried along for the ride: a
  * reviewer reading the package should find exactly what runs.
+ *
+ * It is put together beside dist/<target>, not in it: a browser with the unpacked package loaded
+ * reads its files from there whenever a page loads, and one that found the folder half-built
+ * would report a missing content script until the add-on was reloaded.
  */
 function stage(target, manifest, { bundles, only }) {
-  const dir = path.join(dist, target);
+  const dir = path.join(dist, `.${target}.staging`);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
 
@@ -210,13 +214,23 @@ function zip(dir, output) {
 function build(target, built, { archive }) {
   const spec = TARGETS[target];
   const manifest = spec.manifest(JSON.parse(readFileSync(path.join(root, 'manifest.json'), 'utf8')));
-  const dir = stage(target, manifest, built);
+  const staged = stage(target, manifest, built);
 
-  const problems = verify(dir, manifest);
+  const problems = verify(staged, manifest);
   if (problems.length > 0) {
+    rmSync(staged, { recursive: true, force: true });
     for (const problem of problems) console.error(`  ${target}: ${problem}`);
     throw new BuildError(`${target} package is not loadable`);
   }
+
+  // Swapped in by two renames, so the folder a browser reads is whole before and after; a package
+  // that failed its checks above never replaces the one that worked.
+  const dir = path.join(dist, target);
+  const old = path.join(dist, `.${target}.old`);
+  rmSync(old, { recursive: true, force: true });
+  if (existsSync(dir)) renameSync(dir, old);
+  renameSync(staged, dir);
+  rmSync(old, { recursive: true, force: true });
 
   const files = walk(dir).length;
   if (!archive) {
