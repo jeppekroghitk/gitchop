@@ -1,5 +1,5 @@
 import { loadLinks } from '../lib/links.js';
-import { send } from '../lib/messages.js';
+import { openThroughBackground, send } from '../lib/messages.js';
 import { ownersFromLinks } from '../lib/repos.js';
 import { DEVICE_URL, INSTALL_URL } from '../lib/signin.js';
 import { afterLostPoll, afterPoll, appEntry, countdown, ending, minutesLeft, ownerReach, statusLine } from '../lib/signin-flow.js';
@@ -598,7 +598,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
       const lead = el('p', 'gw-notice', installError ? (network ? 'gitchop could not reach GitHub just now.' : 'GitHub didn’t answer just now.') : 'gitchop hasn’t checked where it is installed yet.');
       if (installError) lead.title = installError;
       const aside = el('p', 'gw-fine');
-      aside.append(linkButton('Install on GitHub', INSTALL_URL, { quiet: true }));
+      aside.append(openThroughBackground(linkButton('Install on GitHub', INSTALL_URL, { quiet: true }), 'gitchop:install:open'));
       return [title, who, lead, actions(button(installError ? 'Try again' : 'Check now', checkInstallations, { primary: true })), aside];
     }
 
@@ -614,13 +614,13 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     }
 
     if (reachedAll(app)) {
-      return [title, who, list, actions(button('Continue', finish, { primary: true }), linkButton('Manage on GitHub', INSTALL_URL))];
+      return [title, who, list, actions(button('Continue', finish, { primary: true }), openThroughBackground(linkButton('Manage on GitHub', INSTALL_URL), 'gitchop:install:open'))];
     }
     return [
       title,
       who,
       list,
-      actions(linkButton('Install on GitHub', INSTALL_URL, { primary: true })),
+      actions(openThroughBackground(linkButton('Install on GitHub', INSTALL_URL, { primary: true }), 'gitchop:install:open')),
       el('p', 'gw-fine', 'GitHub asks which accounts and repositories. In an organisation, an owner may need to approve.'),
     ];
   }

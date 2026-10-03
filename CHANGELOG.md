@@ -25,7 +25,9 @@ it from.
   checks, then shows *Connected to GitHub* for a moment before the organisations. If the code was
   not approved after all, the code comes back with a line saying so. One button copies the code and
   opens GitHub's device page, and once the sign-in is done that page closes itself and the tab the
-  sign-in started in comes back to the front.
+  sign-in started in comes back to the front. **Install on GitHub** does the same: when GitHub
+  lands on the new installation, that tab closes, and the list of where gitchop is installed is
+  asked again, past the minute GitHub otherwise lets the old answer be cached.
 - Escape closes gitchop from the pull requests and news columns too, instead of first moving the
   cursor back to the links.
 - Sign in with GitHub ([#17](https://github.com/jeppekroghitk/gitchop/issues/17)). Settings shows a

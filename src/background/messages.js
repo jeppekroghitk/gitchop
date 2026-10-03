@@ -12,7 +12,7 @@ import { pullsState, refreshPulls, schedulePulls } from './pulls.js';
 import { readPullsSettings } from './pulls-store.js';
 import { rateState } from './rate.js';
 import { buildIndex, indexState, readIndex } from './repo-index.js';
-import { cancelSignIn, openDevicePage, pendingSignIn, pollSignIn, refreshInstallations, startSignIn } from './signin.js';
+import { cancelSignIn, installLanded, openDevicePage, openInstallPage, pendingSignIn, pollSignIn, refreshInstallations, startSignIn } from './signin.js';
 import { connectGist, pull, push, stopBackup } from './sync.js';
 import { addToken, loadTokens, removeToken } from './tokens.js';
 import { dismissMenuHint, markWelcomed, openWelcome, signInAccess, welcomeState } from './welcome.js';
@@ -173,6 +173,20 @@ const HANDLERS = {
    * @returns {Promise<{ opened: boolean }>}
    */
   'gitchop:signin:device': (_message, sender) => openDevicePage(sender?.tab?.id),
+  /**
+   * GitHub's page for installing the app, opened from the asking tab and closed once it lands.
+   * @param {{}} _message
+   * @param {WebExt.MessageSender} [sender]
+   * @returns {Promise<{ opened: boolean }>}
+   */
+  'gitchop:install:open': (_message, sender) => openInstallPage(sender?.tab?.id),
+  /**
+   * The content script on the page GitHub ends an install on.
+   * @param {{}} _message
+   * @param {WebExt.MessageSender} [sender]
+   * @returns {Promise<{ closed: boolean }>}
+   */
+  'gitchop:install:landed': (_message, sender) => installLanded(sender?.tab?.id),
   /** @returns {Promise<{}>} */
   'gitchop:signin:cancel': () => cancelSignIn(),
   /**

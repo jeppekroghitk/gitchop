@@ -1,9 +1,10 @@
 import { api } from '../lib/links.js';
 import { identify } from '../lib/gist.js';
-import { listInstallations, pollToken, requestCode } from '../lib/signin.js';
+import { INSTALL_URL, listInstallations, pollToken, requestCode } from '../lib/signin.js';
 import { seal } from '../lib/vault.js';
 import { forgetRenewal, noteAppSecret } from './app-token.js';
 import { ensureVaultKey, newId, readConfig, state, updateConfig } from './config.js';
+import { INSTALL_TAB_KEY } from './keys.js';
 import { rememberScope } from './rate.js';
 import { SIGNIN_ALARM, clearSignIn, endSignIn, readSession, sessionGeneration, writeSession } from './signin-session.js';
 import { loadTokens, updateTokens } from './tokens.js';
@@ -280,6 +281,45 @@ async function keepSignIn(pair, replaceId, generation) {
     ),
   );
   return true;
+}
+
+/**
+ * In memory where storage.session is switched off, for as long as the background lasts.
+ * @type {{ tabId?: number, openerTabId?: number } | null}
+ */
+let installTabFallback = null;
+
+/**
+ * Opens GitHub's page for installing the app, from the tab that asked, and remembers both tabs:
+ * GitHub ends an install on the installation's settings, which the user would otherwise have to
+ * leave by hand to get back.
+ * @param {number | undefined} openerTabId
+ * @returns {Promise<{ opened: boolean }>}
+ */
+export async function openInstallPage(openerTabId) {
+  const tab = /** @type {WebExt.Tab | undefined} */ (await api.tabs.create(openerTabId === undefined ? { url: INSTALL_URL } : { url: INSTALL_URL, openerTabId }));
+  const record = { tabId: tab?.id, openerTabId };
+  if (api.storage.session) await api.storage.session.set({ [INSTALL_TAB_KEY]: record });
+  else installTabFallback = record;
+  return { opened: true };
+}
+
+/**
+ * The content script, on the page GitHub ends an install on, says so. Only the tab gitchop opened
+ * for it is acted on: the installations are asked again, the tab the user came from comes back to
+ * the front, and the install page is closed. Any other visit to that page is left alone.
+ * @param {number | undefined} tabId
+ * @returns {Promise<{ closed: boolean }>}
+ */
+export async function installLanded(tabId) {
+  const stored = api.storage.session ? (await api.storage.session.get(INSTALL_TAB_KEY))[INSTALL_TAB_KEY] : installTabFallback;
+  if (!stored || tabId === undefined || stored.tabId !== tabId) return { closed: false };
+  if (api.storage.session) await api.storage.session.remove(INSTALL_TAB_KEY);
+  else installTabFallback = null;
+  await refreshInstallations().catch(() => {});
+  if (stored.openerTabId !== undefined) await api.tabs.update(stored.openerTabId, { active: true }).catch(() => {});
+  await api.tabs.remove(tabId).catch(() => {});
+  return { closed: true };
 }
 
 /**

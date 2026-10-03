@@ -132,6 +132,12 @@ function install() {
     owed = next;
   }
   readOwed();
+
+  // GitHub ends an install of gitchop's app on the installation's settings. Said only from there,
+  // so no other page wakes the background; it closes the tab only if it opened it for the install.
+  if (/^\/(?:organizations\/[^/]+\/)?settings\/installations\/\d+\/?$/.test(location.pathname)) {
+    ask({ type: 'gitchop:install:landed' });
+  }
   try {
     api.storage.onChanged.addListener((changes, area) => {
       if (area === 'local' && (changes[WELCOMED_KEY] || changes[CONFIG_KEY])) readOwed();

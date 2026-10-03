@@ -799,3 +799,28 @@ test('with no code under way, the device page is not opened', async () => {
   assert.deepEqual(await send({ type: 'gitchop:signin:device' }, { tab: { id: 7 } }), { ok: true, opened: false });
   assert.ok(!events.some((event) => event.type === 'tabs.create'));
 });
+
+test('the install page gitchop opened is closed when GitHub lands on the installation, and the list asked again', async () => {
+  reset();
+  await seedApp({ installations: [] });
+  assert.deepEqual(await send({ type: 'gitchop:install:open' }, { tab: { id: 7 } }), { ok: true, opened: true });
+  const opened = events.find((event) => event.type === 'tabs.create');
+  assert.equal(opened.url, 'https://github.com/apps/gitchop-for-github/installations/new');
+  assert.equal(opened.openerTabId, 7);
+
+  assert.deepEqual(await send({ type: 'gitchop:install:landed' }, { tab: { id: 99 } }), { ok: true, closed: false }, 'a tab gitchop did not open is left alone');
+  assert.ok(!events.some((event) => event.type === 'tabs.remove'));
+
+  const asked = apiCalls().filter((call) => call.path === '/user/installations').length;
+  assert.deepEqual(await send({ type: 'gitchop:install:landed' }, { tab: { id: 42 } }), { ok: true, closed: true });
+  assert.equal(apiCalls().filter((call) => call.path === '/user/installations').length, asked + 1, 'the installations are asked again');
+  assert.deepEqual(appEntry().owners, ['me', 'itk-dev'], 'and stored');
+  assert.deepEqual(
+    events.filter((event) => event.type === 'tabs.update' || event.type === 'tabs.remove').map(({ type, id }) => [type, id]),
+    [
+      ['tabs.update', 7],
+      ['tabs.remove', 42],
+    ],
+  );
+  assert.deepEqual(await send({ type: 'gitchop:install:landed' }, { tab: { id: 42 } }), { ok: true, closed: false }, 'only once');
+});
