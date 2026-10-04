@@ -552,12 +552,20 @@ function accessStep(sync, app, hooks) {
       names.append(handle(owner));
       if (note) names.append(note);
     });
+    // Every account gitchop knows of is reached, but GitHub does not tell a sign-in which
+    // organisations the user is in: with none added yet the step still asks after them, and with
+    // some added it keeps the way to one more in view.
+    const someOrg = installs.some((install) => install.type === 'Organization');
+    const more = openThroughBackground(linkButton(someOrg ? 'Add another organisation' : 'Add organisations', INSTALL_URL), 'gitchop:install:open');
+    const invite = someOrg
+      ? actionRow(more)
+      : [say('In an organisation? Add the app there too, and gitchop can search its private repositories and follow its pull requests.', 'flow-hint'), actionRow(more)];
     return stepItem({
       number: 2,
       state: 'done',
       title: reachTitle(reached),
       aside: [openThroughBackground(/** @type {HTMLAnchorElement} */ (quiet('Manage on GitHub', INSTALL_URL)), 'gitchop:install:open')],
-      body: [names],
+      body: [names, ...[invite].flat()],
     });
   }
 
