@@ -2,7 +2,7 @@ import { loadLinks } from '../lib/links.js';
 import { openThroughBackground, send } from '../lib/messages.js';
 import { ownersFromLinks } from '../lib/repos.js';
 import { DEVICE_URL, INSTALL_URL } from '../lib/signin.js';
-import { afterLostPoll, afterPoll, appEntry, countdown, ending, minutesLeft, ownerReach, statusLine } from '../lib/signin-flow.js';
+import { afterLostPoll, afterPoll, appEntry, countdown, ending, isOwnAccount, minutesLeft, ownAccountAdded, ownerReach, statusLine } from '../lib/signin-flow.js';
 
 /** @import { Answer, Message, MessageType } from '../background/messages.js' */
 /** @import { SignInCode } from '../background/signin.js' */
@@ -269,7 +269,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     const all = [
       ['allow', 'Allow'],
       ['signin', 'Sign in'],
-      ['orgs', 'Organisations'],
+      ['orgs', 'Accounts'],
       ['ready', 'Ready'],
     ];
     const steps = asksFirst ? all : all.slice(1);
@@ -582,12 +582,16 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   function accessScreen() {
     paintSteps('orgs');
     const app = appEntry(sync);
-    const title = el('h1', 'gw-title', 'Add gitchop to your organisations');
-    // Why an app, and why per organisation: without it the step reads as a chore with no reason.
+    // Signing in says who the user is; what gitchop may see is decided by where its app is added,
+    // the user's own account first. The screen says which of the two is next.
+    const ownDone = Boolean(app && ownAccountAdded(app));
+    const title = el('h1', 'gw-title', ownDone ? 'Add your organisations' : 'Let gitchop see your repositories');
     const who = el(
       'p',
       'gw-lede',
-      'gitchop only sees private repositories in accounts its GitHub app is added to. Add it to your organisations to search their repositories and follow their pull requests.',
+      ownDone
+        ? 'gitchop can see your own private repositories. Add its app to your organisations too, to search their repositories and follow their pull requests.'
+        : 'Signing in tells GitHub who you are. To see your private repositories, gitchop’s app also needs adding to your account, and to each organisation you want it to see.',
     );
     if (!app) return [title, who];
 
@@ -601,24 +605,42 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
       const lead = el('p', 'gw-notice', installError ? (network ? 'gitchop could not reach GitHub just now.' : 'GitHub didn’t answer just now.') : 'gitchop hasn’t checked where it is installed yet.');
       if (installError) lead.title = installError;
       const aside = el('p', 'gw-fine');
-      aside.append(openThroughBackground(linkButton('Install on GitHub', INSTALL_URL, { quiet: true }), 'gitchop:install:open'));
+      aside.append(openThroughBackground(linkButton('Add on GitHub', INSTALL_URL, { quiet: true }), 'gitchop:install:open'));
       return [title, who, lead, actions(button(installError ? 'Try again' : 'Check now', checkInstallations, { primary: true })), aside];
     }
 
     const { installs, covered, uncovered, classic } = ownerReach(sync, app, linkOwners);
-    const list = el('ul', 'gw-owners');
-    for (const install of installs) list.append(ownerRow(install.owner, 'in', install.selection === 'all' ? 'all repositories' : 'chosen repositories'));
-    for (const owner of covered) list.append(ownerRow(owner, 'token', 'through a saved token'));
+    /** @type {[number, HTMLElement][]} */
+    const rows = [];
+    for (const install of installs) {
+      const own = isOwnAccount(app, install.owner);
+      const detail = install.selection === 'all' ? 'all repositories' : 'chosen repositories';
+      rows.push([own ? 0 : 1, ownerRow(install.owner, 'in', own ? `your account, ${detail}` : detail)]);
+    }
+    for (const owner of covered) rows.push([1, ownerRow(owner, 'token', 'through a saved token')]);
     for (const owner of uncovered) {
-      const own = Boolean(app.login && owner.toLowerCase() === app.login.toLowerCase());
+      const own = isOwnAccount(app, owner);
       let detail = classic ? 'through your classic token' : 'public repositories only';
       if (own) detail = `your account, ${detail}`;
-      list.append(ownerRow(owner, 'out', detail));
+      rows.push([own ? 0 : 1, ownerRow(owner, 'out', detail)]);
+    }
+    const list = el('ul', 'gw-owners');
+    // Your own account heads the list: it is the one the step starts with.
+    list.append(...rows.sort((a, b) => a[0] - b[0]).map(([, row]) => row));
+
+    if (!ownDone) {
+      const add = openThroughBackground(linkButton('Add to your account', INSTALL_URL, { primary: true }), 'gitchop:install:open', { own: true });
+      return [
+        title,
+        who,
+        list,
+        actions(add, button('Later', finish)),
+        el('p', 'gw-fine', 'GitHub asks you to confirm. Organisations can be added next, or any time from Settings.'),
+      ];
     }
 
-    // Two ways on, side by side: add the app now, or later from Settings. GitHub does not tell a
-    // sign-in which organisations the user is in, so once one is added, going on is what is left
-    // to offer first; until then, adding one is.
+    // GitHub does not tell a sign-in which organisations the user is in, so once one is added,
+    // going on is what is left to offer first; until then, adding one is.
     const someOrg = installs.some((install) => install.type === 'Organization');
     const add = openThroughBackground(
       linkButton(someOrg ? 'Add another organisation' : 'Add organisations', INSTALL_URL, { primary: !someOrg }),

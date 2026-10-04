@@ -96,7 +96,7 @@ function defaults(request) {
     return json(200, next ?? { error: 'authorization_pending' });
   }
   if (host !== 'api.github.com') return json(404, { message: 'Not Found' });
-  if (path === '/user') return json(200, { login: 'me' });
+  if (path === '/user') return json(200, { login: 'me', id: 4242 });
   if (path === '/user/installations') return json(200, { total_count: installs.length, installations: installs });
   if (path === '/user/repos') return json(200, []);
   if (path === '/graphql') return json(200, { data: {} });
@@ -823,4 +823,15 @@ test('the install page gitchop opened is closed when GitHub lands on the install
     ],
   );
   assert.deepEqual(await send({ type: 'gitchop:install:landed' }, { tab: { id: 42 } }), { ok: true, closed: false }, 'only once');
+});
+
+test('adding the app to your own account goes straight to that account, and falls back to the list', async () => {
+  reset();
+  await seedApp({ installations: [] });
+  await send({ type: 'gitchop:install:open', own: true }, { tab: { id: 7 } });
+  assert.equal(events.find((event) => event.type === 'tabs.create').url, 'https://github.com/apps/gitchop-for-github/installations/new/permissions?target_id=4242');
+
+  reset();
+  await send({ type: 'gitchop:install:open', own: true }, { tab: { id: 7 } });
+  assert.equal(events.find((event) => event.type === 'tabs.create').url, 'https://github.com/apps/gitchop-for-github/installations/new', 'not signed in: the page that lists the accounts');
 });

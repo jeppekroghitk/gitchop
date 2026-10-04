@@ -5,6 +5,11 @@ it from.
 
 ## Unreleased
 
+- Signing in and adding the app are told apart. The second step of the welcome and of Settings ›
+  Sign-in is *Accounts*: until the app is added to your own account it says that signing in only
+  tells GitHub who you are, lists your account first, and offers **Add to your account**, which
+  goes straight to GitHub's page for your account rather than a list to choose from. With your
+  account added, the step turns to adding organisations, now or later.
 - A welcome for new users, shown the first time you press <kbd>.</kbd> on GitHub: the chop plays,
   and the welcome takes the menu's place in the overlay — what signing in unlocks, **Sign in with
   GitHub** carried out right there (the code, GitHub's device page in a new tab, the organisations to

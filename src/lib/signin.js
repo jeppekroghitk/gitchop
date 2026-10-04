@@ -19,6 +19,15 @@ export const CLIENT_ID = 'Iv23liugfptFPUviGlR1';
 export const APP_SLUG = 'gitchop-for-github';
 export const DEVICE_URL = 'https://github.com/login/device';
 export const INSTALL_URL = `https://github.com/apps/${APP_SLUG}/installations/new`;
+
+/**
+ * GitHub's install page for one account, by its numeric id, skipping the list of accounts to pick
+ * from: adding the app to your own account is then one confirmation.
+ * @param {number} accountId
+ */
+export function installUrlFor(accountId) {
+  return `https://github.com/apps/${APP_SLUG}/installations/new/permissions?target_id=${accountId}`;
+}
 export const REVOKE_URL = 'https://github.com/settings/applications';
 /** How close to its end an access token is renewed at the point a request is about to use it. */
 export const REFRESH_MARGIN = 5 * 60 * 1000;

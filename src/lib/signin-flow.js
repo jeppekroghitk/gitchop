@@ -191,3 +191,23 @@ export function ownerReach(sync, app, linkOwners) {
   const classic = (sync?.tokens ?? []).some((entry) => entry.kind === 'classic');
   return { installs, covered, uncovered, classic, total: installs.length + missing.length, reached: installs.length + covered.length };
 }
+
+/**
+ * Whether the app is added to the signed-in user's own account. Signing in only says who the user
+ * is; until the app is added there, even their own private repositories stay out of reach, and
+ * that, not organisations, is the first thing to set up.
+ * @param {TokenView} app
+ */
+export function ownAccountAdded(app) {
+  const login = app.login?.toLowerCase();
+  return Boolean(login && (app.installations ?? []).some((install) => install.owner.toLowerCase() === login));
+}
+
+/**
+ * Whether an owner is the signed-in user.
+ * @param {TokenView} app
+ * @param {string} owner
+ */
+export function isOwnAccount(app, owner) {
+  return Boolean(app.login && owner.toLowerCase() === app.login.toLowerCase());
+}

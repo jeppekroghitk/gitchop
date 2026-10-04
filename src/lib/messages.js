@@ -21,13 +21,14 @@ export function send(message) {
  * link, and so is the background not answering: the page then opens as a plain new tab.
  * @param {HTMLAnchorElement} link
  * @param {'gitchop:install:open'} type
+ * @param {{ own?: boolean }} [options]
  */
-export function openThroughBackground(link, type) {
+export function openThroughBackground(link, type, options = {}) {
   link.addEventListener('click', (event) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     const plain = () => globalThis.open(link.href, '_blank', 'noreferrer');
-    send({ type }).then((reply) => {
+    send({ type, ...options }).then((reply) => {
       if (!(reply?.ok && reply.opened)) plain();
     }, plain);
   });
