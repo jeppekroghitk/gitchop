@@ -3,7 +3,7 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
-## Unreleased
+## 2.10.0
 
 - Turning backup on finds a backup gitchop made before: the Backup page looks through your gists for
   gitchop's file and offers the newest, and any older ones, with **Use this backup**, or starts a new
