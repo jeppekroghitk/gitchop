@@ -15,7 +15,7 @@ import { PULLS_ALARM, refreshPulls, schedulePulls } from './pulls.js';
 import { SIGNIN_ALARM, pollSignIn } from './signin.js';
 import { noteBackedUpChange, pull } from './sync.js';
 import { sealLegacyTokens } from './tokens.js';
-import { markWelcomed, openFromToolbar, welcomeOnUpdate } from './welcome.js';
+import { forgetWelcomeAnswers, openFromToolbar, welcomeOnUpdate } from './welcome.js';
 
 /**
  * The gist is the durable copy; storage.sync is the working copy the menu reads, so the menu opens
@@ -92,10 +92,11 @@ api.storage.onChanged.addListener((changes, area) => {
   if ((area === 'sync' && changes[PULLS_SETTINGS_KEY]) || tokensChanged) {
     schedulePulls().then(() => paintAction()).catch(() => {});
   }
-  // A first sign-in or token, wherever it was made, is the welcome done: taking every token away
-  // later leaves a user who knows gitchop, not a new one.
-  if (area === 'local' && changes[CONFIG_KEY] && (changes[CONFIG_KEY].oldValue?.tokens?.length ?? 0) === 0 && (changes[CONFIG_KEY].newValue?.tokens?.length ?? 0) > 0) {
-    markWelcomed().catch(() => {});
+  // A working sign-in or token, wherever it was made, wipes an earlier "not now": should it be
+  // lost later — signed out, the app removed, the token revoked — the welcome is owed again
+  // until the user says no to it once more.
+  if (area === 'local' && changes[CONFIG_KEY] && !hasUsableToken(changes[CONFIG_KEY].oldValue) && hasUsableToken(changes[CONFIG_KEY].newValue)) {
+    forgetWelcomeAnswers().catch(() => {});
   }
   // The subscriptions and the hour travel with the profile too, so an edit on another machine
   // re-arms the alarm here.

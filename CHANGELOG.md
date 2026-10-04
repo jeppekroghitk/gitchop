@@ -9,17 +9,27 @@ it from.
   and the welcome takes the menu's place in the overlay — what signing in unlocks, **Sign in with
   GitHub** carried out right there (the code, GitHub's device page in a new tab, the organisations to
   install the app on), and **Continue without signing in**, which drops straight into the menu.
-  Once put aside that way, or signed in, it never shows again; Escape or the ✕ in the corner only
-  close it, and the next press greets again. Nothing opens on
-  install. The same welcome, drawn by the same code, has a page of its own: the toolbar button opens
-  it instead of Settings until you sign in, save a token or put it aside. While nothing is signed in,
-  the menu ends in a quiet *Sign in to search your private repositories* row, with a ✕ to hide it;
-  it starts the sign-in in the overlay. On Firefox, until the consent to hold a token has been given,
-  **Sign in with GitHub** opens a gitchop tab at that question alone; once it is answered the tab
-  closes itself and the sign-in carries on in the overlay. The steps, numbered, head each screen. Escape or closing it
-  calls off a code on screen. Updating from 2.9 or
-  older counts as welcomed, as does a first sign-in or token, so the welcome never replaces a menu
-  someone already uses.
+  Put aside that way, it stays away; Escape or the ✕ in the corner only close it, and the next
+  press greets again. A working sign-in or token keeps it away while it works: should the sign-in
+  stop working, signed out or the app removed on GitHub, the welcome comes back as *Sign in
+  again*, until the user once more chooses to go on without. Nothing opens on install. The same welcome, drawn by
+  the same code, has a page of its own: the toolbar button opens it instead of Settings until you
+  sign in, save a token or put it aside. While nothing is signed in, the menu ends in a quiet *Sign
+  in to search your private repositories* row, with a ✕ to hide it; it starts the sign-in in the
+  overlay. On Firefox, until the consent to hold a token has been given, **Sign in with GitHub**
+  opens a gitchop tab at that question alone, as a step of its own; once it is answered the tab
+  closes itself and the sign-in carries on in the overlay. The steps, numbered, head each screen.
+  Escape or closing it calls off a code on screen. Updating from 2.9 or older counts as welcomed,
+  as does a first sign-in or token, so the welcome never replaces a menu someone already uses.
+- Back from approving on GitHub, the welcome says it is finishing the sign-in by itself while it
+  checks, then shows *Connected to GitHub* for a moment before the organisations. If the code was
+  not approved after all, the code comes back with a line saying so. One button copies the code and
+  opens GitHub's device page, and once the sign-in is done that page closes itself and the tab the
+  sign-in started in comes back to the front. **Install on GitHub** does the same: when GitHub
+  lands on the new installation, that tab closes, and the list of where gitchop is installed is
+  asked again, past the minute GitHub otherwise lets the old answer be cached.
+- Escape closes gitchop from the pull requests and news columns too, instead of first moving the
+  cursor back to the links.
 - Sign in with GitHub ([#17](https://github.com/jeppekroghitk/gitchop/issues/17)). Settings shows a
   short code to approve at github.com/login/device, and gitchop is signed in through its own GitHub
   App, *gitchop for GitHub*: read-only on repositories, Gists for the backup, and only where the app

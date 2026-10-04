@@ -1,5 +1,5 @@
 import { loadLinks } from '../lib/links.js';
-import { send } from '../lib/messages.js';
+import { openThroughBackground, send } from '../lib/messages.js';
 import { ownersFromLinks } from '../lib/repos.js';
 import { DEVICE_URL, INSTALL_URL } from '../lib/signin.js';
 import { afterLostPoll, afterPoll, appEntry, countdown, ending, minutesLeft, ownerReach, statusLine } from '../lib/signin-flow.js';
@@ -188,6 +188,17 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   /** @type {string[]} */
   let linkOwners = [];
   let checking = false;
+  /**
+   * Back from GitHub with a code on screen: the user has most likely just approved it, and until
+   * GitHub has been asked, the screen says it is finishing by itself, so nobody wonders whether
+   * there is something left to do.
+   */
+  let confirming = false;
+  /** GitHub was asked after the user came back, and the code was still not approved. */
+  let notApproved = false;
+  /** Signed in a moment ago: the login, shown briefly before the organisations. */
+  /** @type {string | null} */
+  let connectedAs = null;
   /** @type {string | null} */
   let installError = null;
   /** @type {ReturnType<typeof setTimeout> | null} */
@@ -369,11 +380,10 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   function footer() {
     if (screen === 'hello') return [button('Continue without signing in', skip, { quiet: true })];
     if (screen === 'consent') return overlay ? [button('Continue without signing in', skip, { quiet: true })] : [button('Not now', notNow, { quiet: true })];
-    if (screen === 'signin') return flow?.phase === 'disabled' ? [] : [button('Continue without signing in', skip, { quiet: true })];
+    if (screen === 'signin') return flow?.phase === 'disabled' || connectedAs ? [] : [button('Continue without signing in', skip, { quiet: true })];
     if (screen === 'access') {
-      const app = appEntry(sync);
-      const done = app && app.installations && reachedAll(app);
-      return done ? [] : [button('Skip for now', finish, { quiet: true })];
+      // The screen's own Later is the way past it; a second one down here would only compete.
+      return [];
     }
     if (overlay) return [];
     // Put aside, the sign-in is still one click away, in the same words the menu's quiet row uses.
@@ -390,6 +400,15 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     const go = button('Sign in with GitHub', begin, { primary: true });
     go.classList.add('gw-btn-big');
     if (overlay) {
+      // Back because the sign-in stopped working — signed out on GitHub, or the app removed — is
+      // no first visit, and is not greeted as one.
+      if (appEntry(sync)?.needsSignIn) {
+        return [
+          el('h1', 'gw-title', 'Sign in again.'),
+          el('p', 'gw-lede', 'gitchop is no longer connected to your GitHub account. Sign in to unlock everything gitchop can do.'),
+          actions(go),
+        ];
+      }
       return [
         el('h1', 'gw-title', 'Welcome to gitchop.'),
         el('p', 'gw-lede', 'Sign in with GitHub to unlock everything gitchop can do.'),
@@ -461,51 +480,68 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     return row;
   }
 
-  function copyButton() {
-    const code = /** @type {SignInCode} */ (flow?.code);
-    const copy = button('Copy code', async () => {
-      try {
-        await navigator.clipboard.writeText(code.userCode);
-        copy.textContent = 'Copied';
-        announce('Code copied.');
-      } catch {
-        copy.textContent = 'Copy failed';
-      }
-      setTimeout(() => {
-        if (copy.isConnected) copy.textContent = 'Copy code';
-      }, 1600);
-    });
-    return copy;
-  }
-
   function signInScreen() {
     paintSteps('signin');
+    if (connectedAs) {
+      // The sign-in is done: its step is ticked off while the screen still says so.
+      paintSteps('orgs');
+      return [el('p', 'gw-done-mark', '✓'), el('h1', 'gw-title', 'Connected to GitHub'), el('p', 'gw-lede', `Signed in as @${connectedAs}.`)];
+    }
+    if (confirming && flow?.phase === 'code') {
+      const status = el('p', 'gw-status');
+      status.append(el('span', 'gw-pulse'), el('span', 'gw-status-line', 'Checking with GitHub…'));
+      return [
+        el('h1', 'gw-title', 'Finishing your sign-in'),
+        el('p', 'gw-lede', 'gitchop is checking with GitHub that you approved the connection. This continues by itself.'),
+        status,
+      ];
+    }
     if (!flow || flow.phase === 'starting' || flow.phase === 'code') {
       const code = flow?.phase === 'code' && flow.code ? flow.code : null;
-      const open = linkButton('Open GitHub', code?.verificationUri ?? DEVICE_URL, { primary: true });
+      // One button does both: the code goes to the clipboard on the way out, so GitHub's page
+      // only needs a paste. The background opens the page, so it can close it again once the
+      // sign-in is done; a modified click is left to the browser, as for any link.
+      const open = linkButton('Copy code and open GitHub', code?.verificationUri ?? DEVICE_URL, { primary: true });
       const row = actions(open);
-      if (code) row.append(copyButton());
-      else {
+      if (code) {
+        open.addEventListener('click', (event) => {
+          navigator.clipboard.writeText(code.userCode).then(
+            () => announce('Code copied. Paste it on GitHub.'),
+            () => {},
+          );
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          ask({ type: 'gitchop:signin:device' }).then(
+            (reply) => {
+              if (!reply?.opened) window.open(open.href, '_blank', 'noreferrer');
+            },
+            () => window.open(open.href, '_blank', 'noreferrer'),
+          );
+        });
+      } else {
         open.setAttribute('aria-disabled', 'true');
         open.tabIndex = -1;
         open.addEventListener('click', (event) => event.preventDefault());
       }
       const status = el('p', 'gw-status');
       status.dataset.network = String(flow?.status === 'network');
-      status.append(el('span', 'gw-pulse'), el('span', 'gw-status-line', code ? statusLine(flow) : 'Asking GitHub for a code…'));
-      if (code) status.append(el('span', 'gw-count', countdown(code.expiresAt)));
+      // While all is well there is nothing to add under the code: a ticking clock and a standing
+      // "waiting for you" read as pressure. The line appears only for what the user should know.
+      const said = code ? waitingLine() : 'Asking GitHub for a code…';
+      status.append(el('span', 'gw-pulse'), el('span', 'gw-status-line', said));
+      status.hidden = !said;
       // Typing a code into GitHub for something unfamiliar reads as a trick unless it says what
       // is being connected, what that may do, and how it is undone.
       return [
         el('h1', 'gw-title', 'Connect gitchop to your GitHub account'),
-        el('p', 'gw-lede', 'Open GitHub and enter this code to approve the connection.'),
+        el('p', 'gw-lede', 'The button copies this code and opens GitHub. Paste it there to approve the connection.'),
         codeKeys(code ? code.userCode : null),
         row,
         status,
         el(
           'p',
           'gw-fine',
-          'gitchop connects through its own GitHub app, so it never sees your password. The app can read your repositories, issues and pull requests, but never change them, and keeps your settings backup in a secret gist. You can disconnect it at any time in your GitHub settings.',
+          'gitchop connects through its own GitHub app. It can read your repositories but never change them, and you can disconnect it at any time in your GitHub settings.',
         ),
       ];
     }
@@ -546,9 +582,13 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   function accessScreen() {
     paintSteps('orgs');
     const app = appEntry(sync);
-    const title = el('h1', 'gw-title', 'Give gitchop access to your organisations');
-    const who = el('p', 'gw-lede');
-    who.append('Signed in', app?.login ? ` as @${app.login}` : '', '. gitchop sees private repositories only in the accounts you install it on, and only reads them.');
+    const title = el('h1', 'gw-title', 'Add gitchop to your organisations');
+    // Why an app, and why per organisation: without it the step reads as a chore with no reason.
+    const who = el(
+      'p',
+      'gw-lede',
+      'gitchop only sees private repositories in accounts its GitHub app is added to. Add it to your organisations to search their repositories and follow their pull requests.',
+    );
     if (!app) return [title, who];
 
     if (app.installations === null || app.installations === undefined) {
@@ -561,7 +601,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
       const lead = el('p', 'gw-notice', installError ? (network ? 'gitchop could not reach GitHub just now.' : 'GitHub didn’t answer just now.') : 'gitchop hasn’t checked where it is installed yet.');
       if (installError) lead.title = installError;
       const aside = el('p', 'gw-fine');
-      aside.append(linkButton('Install on GitHub', INSTALL_URL, { quiet: true }));
+      aside.append(openThroughBackground(linkButton('Install on GitHub', INSTALL_URL, { quiet: true }), 'gitchop:install:open'));
       return [title, who, lead, actions(button(installError ? 'Try again' : 'Check now', checkInstallations, { primary: true })), aside];
     }
 
@@ -576,15 +616,21 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
       list.append(ownerRow(owner, 'out', detail));
     }
 
-    if (reachedAll(app)) {
-      return [title, who, list, actions(button('Continue', finish, { primary: true }), linkButton('Manage on GitHub', INSTALL_URL))];
-    }
+    // Two ways on, side by side: add the app now, or later from Settings. GitHub does not tell a
+    // sign-in which organisations the user is in, so once one is added, going on is what is left
+    // to offer first; until then, adding one is.
+    const someOrg = installs.some((install) => install.type === 'Organization');
+    const add = openThroughBackground(
+      linkButton(someOrg ? 'Add another organisation' : 'Add organisations', INSTALL_URL, { primary: !someOrg }),
+      'gitchop:install:open',
+    );
+    const go = button(someOrg ? 'Continue' : 'Later', finish, { primary: someOrg });
     return [
       title,
       who,
       list,
-      actions(linkButton('Install on GitHub', INSTALL_URL, { primary: true })),
-      el('p', 'gw-fine', 'GitHub asks which accounts and repositories. In an organisation, an owner may need to approve.'),
+      actions(...(someOrg ? [go, add] : [add, go])),
+      el('p', 'gw-fine', 'You can add organisations any time from Settings. In one you do not own, GitHub asks an owner to approve.'),
     ];
   }
 
@@ -722,9 +768,17 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   /** @param {SignInCode} code */
   function showCode(code) {
     flow = { phase: 'code', code, interval: code.interval, status: 'waiting' };
+    confirming = false;
+    notApproved = false;
     announce(`Your sign-in code is ${code.userCode.split('').join(' ')}. It expires in ${minutesLeft(code.expiresAt)}. Type it on GitHub’s device page.`);
     schedule(code.interval);
     startTick();
+  }
+
+  /** The line under the code: GitHub out of reach, or still waiting — and after a check that found nothing, says so. */
+  function waitingLine() {
+    if (flow?.status === 'network') return statusLine(flow);
+    return notApproved ? 'Not approved yet. Enter the code on GitHub to continue.' : '';
   }
 
   function updateStatus() {
@@ -732,10 +786,11 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     const line = screenEl.querySelector('.gw-status-line');
     if (!status || !line) return;
     /** @type {HTMLElement} */ (status).dataset.network = String(flow?.status === 'network');
-    const text = statusLine(flow);
+    const text = waitingLine();
+    /** @type {HTMLElement} */ (status).hidden = !text;
     if (line.textContent === text) return;
     line.textContent = text;
-    announce(text);
+    if (text) announce(text);
   }
 
   async function pollOnce() {
@@ -753,21 +808,41 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
       return;
     }
     if (flow?.phase !== 'code' || gone) return;
+    // Checking after a return: a pending GitHub was not yet asked for proves nothing, so the
+    // check goes on, a second at a time, until GitHub's own interval lets it ask.
+    if (confirming && reply.status === 'pending' && reply.early) {
+      pollTimer = setTimeout(pollOnce, 1000);
+      return;
+    }
     const next = afterPoll(flow, reply);
     flow = next.flow;
     if (next.verdict === 'waiting' && flow) {
       schedule(flow.interval);
-      updateStatus();
+      if (confirming) {
+        // GitHub answered and the code is not approved: the code comes back, with a line saying so.
+        confirming = false;
+        notApproved = flow.status !== 'network';
+        render({ focus: true });
+        if (notApproved) announce(waitingLine());
+      } else updateStatus();
       return;
     }
     stopTimers();
+    confirming = false;
     if (next.verdict === 'signed-in' || next.verdict === 'gone') {
       sync = reply.state ?? (await ask({ type: 'gitchop:sync:state' }).catch(() => sync));
       const app = appEntry(sync);
       if (app && !app.needsSignIn) {
-        announce('Signed in with GitHub.');
-        go('access');
         if (app.installations === null || app.installations === undefined) checkInstallations();
+        // A beat on "Connected" first, so the move to the next step reads as the result of the
+        // approval rather than as something that happened on its own.
+        connectedAs = app.login ?? 'you';
+        announce(`Connected to GitHub. Signed in as ${connectedAs}.`);
+        render();
+        setTimeout(() => {
+          connectedAs = null;
+          if (!gone && screen === 'signin') go('access');
+        }, 1400);
       } else go('hello');
       return;
     }
@@ -814,7 +889,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     skipped = false;
     const app = appEntry(sync);
     orgsSkipped = !(app && app.installations && reachedAll(app));
-    await ask({ type: 'gitchop:welcome:done' }).catch(() => {});
+    // Not marked done: the sign-in itself keeps the welcome away, and only for as long as it works.
     go('ready');
   }
 
@@ -862,6 +937,11 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   function back() {
     if (!away) return;
     away = false;
+    if (flow?.phase === 'code' && screen === 'signin' && pollTimer) {
+      confirming = true;
+      notApproved = false;
+      render();
+    }
     pollOnReturn();
     recheckConsent();
     setTimeout(recheckOnReturn, 600);
@@ -955,6 +1035,9 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     }
     if (gone) return true;
     const app = appEntry(sync);
+    // The first screen went up before the sign-in was read; one that has stopped working is
+    // greeted as a return, not a first visit.
+    if (app?.needsSignIn && screen === 'hello') render();
     if (app && !app.needsSignIn) {
       stopTimers();
       flow = null;

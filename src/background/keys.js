@@ -12,6 +12,8 @@ export const NEWS_CACHE_KEY = 'newsCache';
 export const CONTRIB_CACHE_KEY = 'contributionsCache';
 /** In storage.session, not storage.local: the sign-in under way. */
 export const SIGNIN_KEY = 'signin';
+/** In storage.session: the tab gitchop opened GitHub's install page in, and the tab it came from. */
+export const INSTALL_TAB_KEY = 'installTab';
 /** The welcome was finished, or put aside with Continue without signing in. */
 export const WELCOMED_KEY = 'welcomed';
 /** The menu's quiet sign-in row was waved away. */

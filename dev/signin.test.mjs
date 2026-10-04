@@ -56,6 +56,18 @@ globalThis.chrome = {
   },
   action: { onClicked: on('action.onClicked'), setBadgeText: async () => {}, setTitle: async () => {} },
   permissions: { contains: async () => hostAccess, onAdded: on('permissions.onAdded'), onRemoved: on('permissions.onRemoved') },
+  tabs: {
+    create: async (properties) => {
+      events.push({ type: 'tabs.create', ...properties });
+      return { id: 42 };
+    },
+    update: async (id, properties) => {
+      events.push({ type: 'tabs.update', id, ...properties });
+    },
+    remove: async (id) => {
+      events.push({ type: 'tabs.remove', id });
+    },
+  },
 };
 const { local, session, sync } = globalThis.chrome.storage;
 
@@ -112,9 +124,9 @@ globalThis.fetch = async (input, init = {}) => {
 
 await import('../src/background/index.js');
 
-function send(message) {
+function send(message, sender = {}) {
   return new Promise((resolve) => {
-    const answered = listeners['runtime.onMessage'][0](message, {}, resolve);
+    const answered = listeners['runtime.onMessage'][0](message, sender, resolve);
     if (!answered) resolve(undefined);
   });
 }
@@ -756,4 +768,59 @@ test('a sign-in whose token does not expire is never dropped for its age, and a 
   await send({ type: 'gitchop:pulls:refresh' });
   assert.equal(appEntry().needsSignIn, true, 'revoked on GitHub, it is marked signed out');
   assert.equal(appEntry().signInError, 'rejected');
+});
+
+test("GitHub's device page, opened for the code, is closed again once the sign-in is done", async () => {
+  reset();
+  await send({ type: 'gitchop:signin:start' });
+  assert.deepEqual(await send({ type: 'gitchop:signin:device' }, { tab: { id: 7 } }), { ok: true, opened: true });
+  const opened = events.find((event) => event.type === 'tabs.create');
+  assert.equal(opened.url, 'https://github.com/login/device');
+  assert.equal(opened.openerTabId, 7, 'opened from the tab that asked');
+  intervalPassed();
+  tokenAnswers = [{ error: 'authorization_pending' }];
+  await send({ type: 'gitchop:signin:poll' });
+  assert.ok(!events.some((event) => event.type === 'tabs.remove'), 'still waiting: the page stays');
+  intervalPassed();
+  tokenAnswers = [pair('one')];
+  assert.equal((await send({ type: 'gitchop:signin:poll' })).status, 'done');
+  assert.deepEqual(
+    events.filter((event) => event.type === 'tabs.update' || event.type === 'tabs.remove').map(({ type, id }) => [type, id]),
+    [
+      ['tabs.update', 7],
+      ['tabs.remove', 42],
+    ],
+    'back to the tab it started in, and the device page closed',
+  );
+});
+
+test('with no code under way, the device page is not opened', async () => {
+  reset();
+  assert.deepEqual(await send({ type: 'gitchop:signin:device' }, { tab: { id: 7 } }), { ok: true, opened: false });
+  assert.ok(!events.some((event) => event.type === 'tabs.create'));
+});
+
+test('the install page gitchop opened is closed when GitHub lands on the installation, and the list asked again', async () => {
+  reset();
+  await seedApp({ installations: [] });
+  assert.deepEqual(await send({ type: 'gitchop:install:open' }, { tab: { id: 7 } }), { ok: true, opened: true });
+  const opened = events.find((event) => event.type === 'tabs.create');
+  assert.equal(opened.url, 'https://github.com/apps/gitchop-for-github/installations/new');
+  assert.equal(opened.openerTabId, 7);
+
+  assert.deepEqual(await send({ type: 'gitchop:install:landed' }, { tab: { id: 99 } }), { ok: true, closed: false }, 'a tab gitchop did not open is left alone');
+  assert.ok(!events.some((event) => event.type === 'tabs.remove'));
+
+  const asked = apiCalls().filter((call) => call.path === '/user/installations').length;
+  assert.deepEqual(await send({ type: 'gitchop:install:landed' }, { tab: { id: 42 } }), { ok: true, closed: true });
+  assert.equal(apiCalls().filter((call) => call.path === '/user/installations').length, asked + 1, 'the installations are asked again');
+  assert.deepEqual(appEntry().owners, ['me', 'itk-dev'], 'and stored');
+  assert.deepEqual(
+    events.filter((event) => event.type === 'tabs.update' || event.type === 'tabs.remove').map(({ type, id }) => [type, id]),
+    [
+      ['tabs.update', 7],
+      ['tabs.remove', 42],
+    ],
+  );
+  assert.deepEqual(await send({ type: 'gitchop:install:landed' }, { tab: { id: 42 } }), { ok: true, closed: false }, 'only once');
 });

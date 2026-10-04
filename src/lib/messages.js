@@ -14,3 +14,22 @@ import { api } from './links.js';
 export function send(message) {
   return api.runtime.sendMessage(message);
 }
+
+/**
+ * Has a link to one of GitHub's pages opened by the background instead, so it can close the tab
+ * again once that page has done its job. A modified click is left to the browser, as for any
+ * link, and so is the background not answering: the page then opens as a plain new tab.
+ * @param {HTMLAnchorElement} link
+ * @param {'gitchop:install:open'} type
+ */
+export function openThroughBackground(link, type) {
+  link.addEventListener('click', (event) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    const plain = () => globalThis.open(link.href, '_blank', 'noreferrer');
+    send({ type }).then((reply) => {
+      if (!(reply?.ok && reply.opened)) plain();
+    }, plain);
+  });
+  return link;
+}
