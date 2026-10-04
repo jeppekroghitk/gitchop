@@ -40,6 +40,7 @@
           <button type="button" class="rail-item" data-page="token">Sign-in</button>
           <button type="button" class="rail-item" data-page="index" data-needs-token>Index</button>
           <button type="button" class="rail-item" data-page="backup" data-needs-token>Backup</button>
+          <button type="button" class="rail-item" data-page="tokens" id="rail-tokens" hidden>Access tokens</button>
         </nav>
 
         <div class="page">
@@ -106,14 +107,27 @@
               <span class="visually-hidden" id="signin-announce" role="status" aria-live="polite"></span>
             </header>
             <p class="intro">
-              Sign in with GitHub, or add tokens, to unlock private repository search, the pull
-              requests, news from private repositories, your contributions, and backing your links up
-              to a secret gist.
+              Sign in with GitHub to unlock private repository search, the pull requests, news from
+              private repositories, your contributions, and backing your links up to a secret gist.
             </p>
             <section class="card">
               <div id="sync"></div>
             </section>
             <div class="notes" id="token-notes"></div>
+          </div>
+
+          <div class="pane" data-page="tokens" hidden>
+            <header class="pane-head">
+              <h2 class="pane-title">Access tokens</h2>
+            </header>
+            <p class="intro">
+              For what signing in does not cover: an organisation that will not add gitchop’s app, or
+              counting every private contribution. Most people never need one.
+            </p>
+            <section class="card">
+              <div id="pat-card"></div>
+            </section>
+            <div class="notes" id="pat-notes"></div>
           </div>
 
           <div class="pane" data-page="index" hidden>

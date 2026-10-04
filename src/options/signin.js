@@ -2,7 +2,7 @@ import { loadLinks } from '../lib/links.js';
 import { ownersFromLinks } from '../lib/repos.js';
 import { INSTALL_URL, REVOKE_URL } from '../lib/signin.js';
 import { openThroughBackground } from '../lib/messages.js';
-import { afterLostPoll, afterPoll, appEntry, countdown, endedLine, ending, minutesLeft, ownerReach, requestAccess, statusLine } from '../lib/signin-flow.js';
+import { afterLostPoll, afterPoll, appEntry, countdown, endedLine, ending, isOwnAccount, minutesLeft, ownAccountAdded, ownerReach, requestAccess, statusLine } from '../lib/signin-flow.js';
 
 /** @import { Answer, Message, MessageType } from '../background/messages.js' */
 /** @import { SignInCode } from '../background/signin.js' */
@@ -507,13 +507,13 @@ function askAgain(node, hooks) {
  * @param {Hooks} hooks
  */
 function unknownAccess(hooks) {
-  const title = 'Give gitchop access to your organisations';
+  const title = 'Choose what gitchop can see';
   if (checking) return stepItem({ number: 2, state: 'current', title, body: [say('Asking GitHub where gitchop is installed…', 'signin-status')] });
   const again = button(installError ? 'Try again' : 'Check now', { primary: true });
   again.addEventListener('click', () => askAgain(again, hooks));
   const lead = say(installError ? 'Could not check where gitchop is installed.' : 'Not checked yet where gitchop is installed.', 'signin-status');
   if (installError) lead.append(element('span', 'flow-reason', installError));
-  return stepItem({ number: 2, state: installError ? 'warn' : 'current', title, body: [lead, actionRow(again, openThroughBackground(linkButton('Install on GitHub', INSTALL_URL), 'gitchop:install:open'))] });
+  return stepItem({ number: 2, state: installError ? 'warn' : 'current', title, body: [lead, actionRow(again, openThroughBackground(linkButton('Add on GitHub', INSTALL_URL), 'gitchop:install:open'))] });
 }
 
 /**
@@ -552,39 +552,62 @@ function accessStep(sync, app, hooks) {
       names.append(handle(owner));
       if (note) names.append(note);
     });
+    // Every account gitchop knows of is reached, but GitHub does not tell a sign-in which
+    // organisations the user is in: with none added yet the step still asks after them, and with
+    // some added it keeps the way to one more in view.
+    const someOrg = installs.some((install) => install.type === 'Organization');
+    const more = openThroughBackground(linkButton(someOrg ? 'Add another organisation' : 'Add organisations', INSTALL_URL), 'gitchop:install:open');
+    const invite = someOrg
+      ? actionRow(more)
+      : [say('In an organisation? Add the app there too, and gitchop can search its private repositories and follow its pull requests.', 'flow-hint'), actionRow(more)];
     return stepItem({
       number: 2,
       state: 'done',
       title: reachTitle(reached),
       aside: [openThroughBackground(/** @type {HTMLAnchorElement} */ (quiet('Manage on GitHub', INSTALL_URL)), 'gitchop:install:open')],
-      body: [names],
+      body: [names, ...[invite].flat()],
     });
   }
 
-  const list = element('ul', 'flow-owners');
+  /** @type {[number, HTMLElement][]} */
+  const rows = [];
   for (const install of installs) {
-    list.append(ownerRow(install.owner, 'in', install.selection === 'all' ? 'all repositories' : 'chosen repositories', null));
+    const own = isOwnAccount(app, install.owner);
+    const detail = install.selection === 'all' ? 'all repositories' : 'chosen repositories';
+    rows.push([own ? 0 : 1, ownerRow(install.owner, 'in', own ? `your account, ${detail}` : detail, null)]);
   }
-  for (const owner of covered) list.append(ownerRow(owner, 'token', 'through a saved token', null));
+  for (const owner of covered) rows.push([1, ownerRow(owner, 'token', 'through a saved token', null)]);
   for (const owner of uncovered) {
-    const own = Boolean(app.login && owner.toLowerCase() === app.login.toLowerCase());
+    const own = isOwnAccount(app, owner);
     let detail = classic ? 'through your classic token' : 'public repositories only';
     if (own) detail = `your account, ${detail}`;
-    list.append(ownerRow(owner, 'out', detail, own ? null : hooks));
+    rows.push([own ? 0 : 1, ownerRow(owner, 'out', detail, own ? null : hooks)]);
   }
-  const install = openThroughBackground(linkButton('Install on GitHub', INSTALL_URL, { primary: true }), 'gitchop:install:open');
+  const list = element('ul', 'flow-owners');
+  list.append(...rows.sort((a, b) => a[0] - b[0]).map(([, row]) => row));
+
+  // Signed in is not yet seeing anything private: the user's own account comes first, then
+  // organisations. The step says which is next, and offers that first.
+  const ownDone = ownAccountAdded(app);
+  const organisations = openThroughBackground(linkButton('Add organisations', INSTALL_URL, { primary: ownDone }), 'gitchop:install:open');
+  const actions = ownDone
+    ? actionRow(organisations)
+    : actionRow(openThroughBackground(linkButton('Add to your account', INSTALL_URL, { primary: true }), 'gitchop:install:open', { own: true }), organisations);
   return stepItem({
     number: 2,
     state: 'current',
-    title: 'Give gitchop access to your organisations',
+    title: ownDone ? 'Add your organisations' : 'Let gitchop see your repositories',
     meta: total > 0 ? `${reached} of ${total} accounts` : null,
     body: [
-      list,
-      actionRow(install),
       say(
-        'On GitHub, pick the account and its repositories; in an organisation you do not own, the install goes to its owners as a request. This list updates when you come back.',
+        ownDone
+          ? 'gitchop can see your own private repositories. Add its app to your organisations to search theirs and follow their pull requests.'
+          : 'Signing in tells GitHub who you are. To see your private repositories, gitchop’s app also needs adding to your account, and to each organisation you want it to see.',
         'flow-hint',
       ),
+      list,
+      actions,
+      say('In an organisation you do not own, GitHub asks an owner to approve. This list updates when you come back.', 'flow-hint'),
     ],
   });
 }
@@ -740,7 +763,7 @@ function contents(sync, hooks) {
   const list = element('ol', 'flow');
   if (!app || flow) confirmingOut = false;
   if (!flow && app && !app.needsSignIn) list.append(...signedInSteps(sync, app, hooks));
-  else list.append(firstStep(sync, hooks), stepItem({ number: 2, state: 'todo', title: 'Give gitchop access to your organisations' }));
+  else list.append(firstStep(sync, hooks), stepItem({ number: 2, state: 'todo', title: 'Choose what gitchop can see' }));
   return [list];
 }
 

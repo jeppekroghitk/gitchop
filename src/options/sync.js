@@ -1,7 +1,7 @@
 import { tokenLabel } from '../lib/gist.js';
 import { api } from '../lib/links.js';
 import { send } from '../lib/messages.js';
-import { tokenGate, tokenState } from './pages.js';
+import { show, tokenGate, tokenState } from './pages.js';
 import { resumeAfterCache, resumeSignIn, signInBlock, stopSignIn } from './signin.js';
 
 /** @import { Answer, Message, MessageType } from '../background/messages.js' */
@@ -37,17 +37,19 @@ function fineTokenUrl(owner) {
 }
 
 const tokenHost = /** @type {HTMLElement} */ (document.getElementById('sync'));
+const tokensHost = /** @type {HTMLElement} */ (document.getElementById('pat-card'));
 const backupHost = /** @type {HTMLElement} */ (document.getElementById('backup'));
 /** Under each card: the cautions, the fine print, and what the backup would take. */
 const tokenNotes = /** @type {HTMLElement} */ (document.getElementById('token-notes'));
+const tokensNotes = /** @type {HTMLElement} */ (document.getElementById('pat-notes'));
 const backupNotes = /** @type {HTMLElement} */ (document.getElementById('backup-notes'));
+/** The rail's Access tokens: on the rail once a token is saved or the page is asked for, not before. */
+const tokensRail = /** @type {HTMLElement} */ (document.getElementById('rail-tokens'));
 
 let busy = false;
 /** @type {Answer<'gitchop:sync:state'> | null} */
 let current = null;
 let onTokenChange = () => {};
-/** Whether the personal access token disclosure is open, kept across the card's redraws. */
-let advancedOpen = false;
 /**
  * Fills the recipe's owner, from the sign-in block's "add a token for @org". Set as the card draws.
  * @type {(owner: string) => void}
@@ -325,28 +327,14 @@ function recipe() {
 }
 
 /**
- * Personal access tokens, behind a disclosure: signing in covers the common case, and these are
- * for what it does not — an organisation that will not install the app, or private contributions.
- * Closed until opened, and open across redraws once it has been.
+ * Opens Access tokens: puts it on the rail, which it is kept off until a token is saved, and shows
+ * it, with the form for an organisation filled in when one is named.
+ * @param {string} [owner]
  */
-/**
- * @param {boolean} hasTokens whether anything works already — a sign-in or a saved token — so a
- *   token is one more, not the other way
- */
-function advanced(hasTokens) {
-  const box = element('details', 'advanced');
-  box.open = advancedOpen;
-  box.addEventListener('toggle', () => {
-    advancedOpen = box.open;
-  });
-  const { node, prefill } = recipe();
-  box.append(element('summary', null, hasTokens ? 'Add a personal access token' : 'Use a personal access token instead'), node, classicCaution());
-  prefillOwner = (owner) => {
-    advancedOpen = true;
-    box.open = true;
-    prefill(owner);
-  };
-  return box;
+function openTokens(owner) {
+  tokensRail.hidden = false;
+  show('tokens');
+  if (owner) prefillOwner(owner);
 }
 
 /** How the sign-in block reaches back into the card. */
@@ -359,13 +347,7 @@ const signInHooks = {
     render(sync);
     onTokenChange();
   },
-  openAdvanced: (owner) => {
-    if (owner) prefillOwner(owner);
-    else {
-      advancedOpen = true;
-      render(current);
-    }
-  },
+  openAdvanced: (owner) => openTokens(owner),
 };
 
 /**
@@ -463,17 +445,41 @@ function broadWarning(sync) {
 function tokenCard(sync, error) {
   const wrap = element('div', 'card-body');
   wrap.append(signInBlock(sync, signInHooks));
+  if (error) wrap.append(element('p', 'error', error));
+  // Tokens have a page of their own; from here, one quiet line says where, for whoever looks.
+  const elsewhere = element('p', 'note');
+  const go = element('button', 'quiet', 'Access tokens');
+  go.type = 'button';
+  go.addEventListener('click', () => openTokens());
+  elsewhere.append('An organisation that will not add the app? Personal access tokens are under ', go, '.');
+  tokenNotes.append(elsewhere, fineprint());
+  return wrap;
+}
+
+/**
+ * Access tokens: the saved ones, and the form for another, always open here. Tokens are the way
+ * for what signing in does not cover, so they sit on a page of their own, off the rail until used.
+ * @param {Answer<'gitchop:sync:state'> | null} sync
+ * @param {string | null | undefined} error
+ */
+function tokensCard(sync, error) {
+  const wrap = element('div', 'card-body');
   const pats = (sync?.tokens ?? []).filter((entry) => entry.kind !== 'app');
   if (pats.length > 0) {
     const saved = element('div', 'saved');
     saved.append(element('h3', 'saved-title', pats.length === 1 ? 'Saved token' : 'Saved tokens'), tokenList(pats));
     wrap.append(saved);
   }
-  wrap.append(advanced(pats.length > 0 || Boolean(sync?.tokens.some((entry) => entry.kind === 'app' && !entry.needsSignIn))));
+  const { node, prefill } = recipe();
+  prefillOwner = prefill;
+  const add = element('div', 'advanced-open');
+  add.append(element('h3', 'saved-title', pats.length > 0 ? 'Add another token' : 'Add a token'), node);
+  wrap.append(add);
   if (error) wrap.append(element('p', 'error', error));
   const warn = sync ? broadWarning(sync) : null;
-  if (warn) tokenNotes.append(warn);
-  tokenNotes.append(fineprint());
+  if (warn) tokensNotes.append(warn);
+  tokensNotes.append(classicCaution(), fineprint());
+  if (pats.length > 0) tokensRail.hidden = false;
   return wrap;
 }
 
@@ -602,6 +608,9 @@ function render(sync, error, card = 'token') {
   tokenHost.textContent = '';
   tokenNotes.textContent = '';
   tokenHost.append(tokenCard(sync, tokenError));
+  tokensHost.textContent = '';
+  tokensNotes.textContent = '';
+  tokensHost.append(tokensCard(sync, tokenError));
 
   backupHost.textContent = '';
   backupNotes.textContent = '';

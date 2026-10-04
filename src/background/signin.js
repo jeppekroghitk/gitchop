@@ -1,6 +1,6 @@
 import { api } from '../lib/links.js';
 import { identify } from '../lib/gist.js';
-import { INSTALL_URL, listInstallations, pollToken, requestCode } from '../lib/signin.js';
+import { INSTALL_URL, installUrlFor, listInstallations, pollToken, requestCode } from '../lib/signin.js';
 import { seal } from '../lib/vault.js';
 import { forgetRenewal, noteAppSecret } from './app-token.js';
 import { ensureVaultKey, newId, readConfig, state, updateConfig } from './config.js';
@@ -293,15 +293,36 @@ let installTabFallback = null;
  * Opens GitHub's page for installing the app, from the tab that asked, and remembers both tabs:
  * GitHub ends an install on the installation's settings, which the user would otherwise have to
  * leave by hand to get back.
+ * For the user's own account it goes straight to that account's page, which GitHub addresses by
+ * numeric id, so adding it there is one confirmation; anything that keeps the id out of reach
+ * falls back to the page that lists the accounts to choose from.
  * @param {number | undefined} openerTabId
+ * @param {boolean} [own]
  * @returns {Promise<{ opened: boolean }>}
  */
-export async function openInstallPage(openerTabId) {
-  const tab = /** @type {WebExt.Tab | undefined} */ (await api.tabs.create(openerTabId === undefined ? { url: INSTALL_URL } : { url: INSTALL_URL, openerTabId }));
+export async function openInstallPage(openerTabId, own = false) {
+  let url = INSTALL_URL;
+  if (own) url = (await ownInstallUrl().catch(() => null)) ?? INSTALL_URL;
+  const tab = /** @type {WebExt.Tab | undefined} */ (await api.tabs.create(openerTabId === undefined ? { url } : { url, openerTabId }));
   const record = { tabId: tab?.id, openerTabId };
   if (api.storage.session) await api.storage.session.set({ [INSTALL_TAB_KEY]: record });
   else installTabFallback = record;
   return { opened: true };
+}
+
+/**
+ * The install page for the signed-in user's own account, or null without a working sign-in.
+ * @returns {Promise<string | null>}
+ */
+async function ownInstallUrl() {
+  const app = (await loadTokens()).find((entry) => entry.kind === 'app' && !entry.needsSignIn);
+  if (!app) return null;
+  const response = await fetch('https://api.github.com/user', {
+    headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${app.secret}`, 'X-GitHub-Api-Version': '2022-11-28' },
+  });
+  if (!response.ok) return null;
+  const { id } = await response.json();
+  return Number.isInteger(id) ? installUrlFor(id) : null;
 }
 
 /**

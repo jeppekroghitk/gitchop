@@ -174,12 +174,13 @@ const HANDLERS = {
    */
   'gitchop:signin:device': (_message, sender) => openDevicePage(sender?.tab?.id),
   /**
-   * GitHub's page for installing the app, opened from the asking tab and closed once it lands.
-   * @param {{}} _message
+   * GitHub's page for installing the app, opened from the asking tab and closed once it lands;
+   * `own` goes straight to the signed-in user's own account.
+   * @param {{ own?: boolean }} message
    * @param {WebExt.MessageSender} [sender]
    * @returns {Promise<{ opened: boolean }>}
    */
-  'gitchop:install:open': (_message, sender) => openInstallPage(sender?.tab?.id),
+  'gitchop:install:open': ({ own }, sender) => openInstallPage(sender?.tab?.id, own === true),
   /**
    * The content script on the page GitHub ends an install on.
    * @param {{}} _message
