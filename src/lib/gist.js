@@ -195,6 +195,34 @@ export async function createStore(token, backup) {
 }
 
 /**
+ * A backup gitchop made before, as the list of the user's gists shows it.
+ * @typedef {{ id: string, url: string, updatedAt: string | null }} FoundStore
+ */
+
+/**
+ * The user's gists that hold gitchop's file, newest first, so turning backup on can offer the one
+ * made on another machine instead of asking for its id. Secret gists are listed too: it is the
+ * owner asking. Read three pages at most; a backup further back than three hundred gists can
+ * still be adopted by its id.
+ * @param {string} token
+ * @returns {Promise<FoundStore[]>}
+ */
+export async function findStores(token) {
+  /** @type {FoundStore[]} */
+  const found = [];
+  for (let page = 1; page <= 3; page += 1) {
+    /** @type {any[]} */
+    const gists = await call(token, `/gists?per_page=100&page=${page}`);
+    for (const gist of Array.isArray(gists) ? gists : []) {
+      if (!gist?.files?.[FILE] || typeof gist.id !== 'string') continue;
+      found.push({ id: gist.id, url: String(gist.html_url ?? ''), updatedAt: typeof gist.updated_at === 'string' ? gist.updated_at : null });
+    }
+    if (!Array.isArray(gists) || gists.length < 100) break;
+  }
+  return found.sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+}
+
+/**
  * @param {string} token
  * @param {string} gistId
  * @returns {Promise<Store & { url: string }>}

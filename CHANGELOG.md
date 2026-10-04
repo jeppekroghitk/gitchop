@@ -5,6 +5,10 @@ it from.
 
 ## Unreleased
 
+- Turning backup on finds a backup gitchop made before: the Backup page looks through your gists for
+  gitchop's file and offers the newest, and any older ones, with **Use this backup**, or starts a new
+  one. Pasting a gist id stays possible, for a backup under another account, beside a link to your
+  gists.
 - Signing in and adding the app are told apart. The second step of the welcome and of Settings ›
   Sign-in is *Accounts*: until the app is added to your own account it says that signing in only
   tells GitHub who you are, lists your account first, and offers **Add to your account**, which
