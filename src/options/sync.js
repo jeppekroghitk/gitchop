@@ -56,6 +56,12 @@ let onTokenChange = () => {};
  */
 let prefillOwner = () => {};
 let resumed = false;
+/**
+ * Earlier backups found in the account's gists: not asked yet, being asked, the answer, or why
+ * there is none. Asked once per visit to the page, the first time backup is offered.
+ * @type {null | 'asking' | { found: { id: string, url: string, updatedAt: string | null }[] } | { error: string }}
+ */
+let earlier = null;
 
 /**
  * Each card has its own status corner, so a saved token and a pushed gist do not fight over one.
@@ -298,7 +304,7 @@ function fineprint() {
         'ever sent to api.github.com, and never handed to a web page. They are used for these calls and ' +
         'no others: who the account is, which repositories it can see, searching repositories, which ' +
         'open pull requests are yours or want your review, what happened lately in the repositories you ' +
-        'subscribe to, your contributions count, where gitchop’s app is installed, and reading and ' +
+        'subscribe to, your contributions count, where gitchop’s app is installed, listing your gists to find an earlier backup, and reading and ' +
         'writing the one gist. Obfuscation is not encryption — anyone with access to this profile can ' +
         'still recover them — but a token no longer sits in the profile as searchable text.',
     ),
@@ -507,41 +513,85 @@ function backupNeedsToken() {
   return tokenGate();
 }
 
+function lookForEarlier() {
+  earlier = 'asking';
+  ask({ type: 'gitchop:sync:find' }).then(
+    (answer) => {
+      earlier = { found: answer.found };
+      render(current);
+    },
+    (error) => {
+      earlier = { error: String(error.message ?? error) };
+      render(current);
+    },
+  );
+}
+
+/**
+ * Turns backup on: with a gist id, by adopting that gist; without one, by making a new one.
+ * @param {HTMLButtonElement} node
+ * @param {string} gistId
+ */
+function enableBackup(node, gistId) {
+  return guard(node, 'backup', async (flash) => {
+    if (!(await consent(['bookmarksInfo']))) {
+      flash('not allowed');
+      return;
+    }
+    const result = await ask({ type: 'gitchop:sync:connect', gistId });
+    flash('backing up');
+    current = result;
+    render(result);
+  });
+}
+
+/**
+ * A backup made on another machine is offered by itself: the account's gists are searched for
+ * gitchop's file, so nobody has to copy a gist id across. Pasting one stays possible, for a backup
+ * kept under another account, behind a disclosure with a link to the gists.
+ */
 function backupOff(sync, error) {
   const wrap = element('div', 'card-body');
-  backupNotes.append(
-    element(
-      'p',
-      'note',
-      'Leave the field empty and a new secret gist is made from your links and settings. Paste the id ' +
-        'of a gist gitchop made before to adopt it instead; what it holds replaces what is here.',
-    ),
-  );
+  if (earlier === null) lookForEarlier();
 
-  const gist = textInput({ placeholder: 'existing gist id (leave empty to create one)', label: 'Gist id' });
+  const manual = element('details', 'fineprint');
+  const gist = textInput({ placeholder: 'gist id', label: 'Gist id' });
+  const adopt = button('Use this gist');
+  adopt.addEventListener('click', () => enableBackup(adopt, gist.value));
   const fields = element('div', 'form');
   fields.append(field('Gist', gist));
-
-  const enable = button('Enable backup', { primary: true });
-  enable.addEventListener('click', () =>
-    guard(enable, 'backup', async (flash) => {
-      if (!(await consent(['bookmarksInfo']))) {
-        flash('not allowed');
-        return;
-      }
-      const result = await ask({ type: 'gitchop:sync:connect', gistId: gist.value });
-      flash('backing up');
-      current = result;
-      render(result);
-    }),
-  );
+  const manualActions = element('div', 'actions');
+  manualActions.append(quietLink('Your gists on GitHub', 'https://gist.github.com/'), adopt);
+  manual.append(element('summary', null, 'Use a backup from another account'), fields, manualActions);
 
   const actions = element('div', 'actions');
-  actions.append(enable);
-
-  wrap.append(fields);
+  if (earlier === 'asking' || earlier === null) {
+    wrap.append(element('p', 'note', 'Looking in your gists for an earlier gitchop backup…'));
+  } else if ('found' in earlier && earlier.found.length > 0) {
+    const [newest, ...older] = earlier.found;
+    wrap.append(element('p', 'note', `Found a gitchop backup in your gists, last changed ${when(newest.updatedAt)}. Using it replaces the links and settings here with what it holds.`));
+    const list = element('ul', 'found-backups');
+    for (const store of [newest, ...older]) {
+      const row = element('li');
+      const use = button(store === newest ? 'Use this backup' : 'Use this one', { primary: store === newest });
+      use.addEventListener('click', () => enableBackup(use, store.id));
+      row.append(link(`Backup from ${when(store.updatedAt)}`, store.url), use);
+      list.append(row);
+    }
+    wrap.append(list);
+    const fresh = button('Start a new backup instead');
+    fresh.addEventListener('click', () => enableBackup(fresh, ''));
+    actions.append(fresh);
+  } else {
+    const reason = 'error' in earlier ? `Could not look through your gists: ${earlier.error}` : 'No earlier gitchop backup in your gists.';
+    wrap.append(element('p', 'note', `${reason} Turning backup on makes a new secret gist from your links and settings.`));
+    const create = button('Create a backup', { primary: true });
+    create.addEventListener('click', () => enableBackup(create, ''));
+    actions.append(create);
+  }
   if (error ?? sync.lastError) wrap.append(element('p', 'error', error ?? sync.lastError));
-  wrap.append(actions);
+  if (actions.children.length > 0) wrap.append(actions);
+  backupNotes.append(manual);
   return wrap;
 }
 

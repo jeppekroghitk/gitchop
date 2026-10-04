@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import { test } from 'node:test';
-import { identify, parseExpiry, parseStore, serialise, tokenKind } from '../src/lib/gist.js';
+import { findStores, identify, parseExpiry, parseStore, serialise, tokenKind } from '../src/lib/gist.js';
 
 test('a token runs out when the header GitHub sends with every request made with it says', () => {
   assert.equal(parseExpiry('2026-12-31 12:00:00 UTC'), '2026-12-31T12:00:00.000Z', "GitHub's header, as an ISO stamp");
@@ -73,6 +73,31 @@ test('a sign-in stays a sign-in when GitHub sends an empty scopes header for it'
     assert.deepEqual(await identify('ghu_x'), { login: 'me', scopes: [], kind: 'app', expiresAt: null });
     assert.equal((await identify('ghp_x')).kind, 'classic', 'the header still makes an unprefixed-as-app token classic');
     assert.equal((await identify('unknown_x')).kind, 'classic');
+  } finally {
+    globalThis.fetch = before;
+  }
+});
+
+test("an earlier backup is found among the account's gists by gitchop's file, newest first", async () => {
+  const before = globalThis.fetch;
+  const pages = [];
+  const gist = (id, file, updated) => ({ id, html_url: `https://gist.github.com/${id}`, updated_at: updated, files: { [file]: {} } });
+  const first = [
+    gist('notes', 'notes.md', '2026-10-01T00:00:00Z'),
+    gist('old', 'gitchop.json', '2026-01-01T00:00:00Z'),
+    ...Array.from({ length: 98 }, (_, n) => gist(`other${n}`, 'x.txt', '2026-05-01T00:00:00Z')),
+  ];
+  const second = [gist('new', 'gitchop.json', '2026-09-01T00:00:00Z')];
+  globalThis.fetch = async (url) => {
+    const page = Number(new URL(url).searchParams.get('page'));
+    pages.push(page);
+    return new Response(JSON.stringify(page === 1 ? first : second), { status: 200 });
+  };
+  try {
+    const found = await findStores('ghu_x');
+    assert.deepEqual(found.map((store) => store.id), ['new', 'old'], 'only gists holding gitchop.json, the newest first');
+    assert.equal(found[0].url, 'https://gist.github.com/new');
+    assert.deepEqual(pages, [1, 2], 'a full page asks for the next; a short one ends it');
   } finally {
     globalThis.fetch = before;
   }

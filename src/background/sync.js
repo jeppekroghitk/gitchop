@@ -1,5 +1,5 @@
 import { DEFAULT_LINKS, PANEL_KEY, STORAGE_KEY as LINKS_KEY, api, isSafeUrl, sanitize, sanitizePanel, withIds } from '../lib/links.js';
-import { createStore, readStore, writeStore } from '../lib/gist.js';
+import { createStore, findStores, readStore, writeStore } from '../lib/gist.js';
 import { SETTINGS_KEY as PULLS_SETTINGS_KEY, sanitizeSettings as pullsSettings } from '../lib/pulls.js';
 import { KEY as EFFECTS_KEY, sanitize as sanitizeEffects } from '../lib/effects.js';
 import { SETTINGS_KEY as NEWS_SETTINGS_KEY, sanitizeSettings as newsSettings } from '../lib/news.js';
@@ -194,6 +194,15 @@ export async function pull({ force = false } = {}) {
   await writeConfig({ lastPulledAt: now(), lastError: null, dirty: false });
   upgradeStore(remote);
   return { changed: JSON.stringify(applied) !== before, count: applied[LINKS_KEY].length };
+}
+
+/**
+ * The backups gitchop made before, in this account's gists, for turning backup on without a gist
+ * id: whichever token can read the gists is asked.
+ * @returns {Promise<{ found: import('../lib/gist.js').FoundStore[] }>}
+ */
+export async function findBackups() {
+  return { found: await withGistToken((token) => findStores(token)) };
 }
 
 /** @param {{ gistId?: string }} request */

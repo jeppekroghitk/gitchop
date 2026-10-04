@@ -13,7 +13,7 @@ import { readPullsSettings } from './pulls-store.js';
 import { rateState } from './rate.js';
 import { buildIndex, indexState, readIndex } from './repo-index.js';
 import { cancelSignIn, installLanded, openDevicePage, openInstallPage, pendingSignIn, pollSignIn, refreshInstallations, startSignIn } from './signin.js';
-import { connectGist, pull, push, stopBackup } from './sync.js';
+import { connectGist, findBackups, pull, push, stopBackup } from './sync.js';
 import { addToken, loadTokens, removeToken } from './tokens.js';
 import { dismissMenuHint, markWelcomed, openWelcome, signInAccess, welcomeState } from './welcome.js';
 
@@ -195,6 +195,8 @@ const HANDLERS = {
    * @returns {Promise<SyncState>}
    */
   'gitchop:signin:installations': () => refreshInstallations(),
+  /** Backups gitchop made before, found in the account's gists. */
+  'gitchop:sync:find': () => findBackups(),
   /** @param {{ gistId?: string }} message */
   'gitchop:sync:connect': (message) => connectGist(message),
   'gitchop:sync:stop': () => stopBackup(),

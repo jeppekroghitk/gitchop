@@ -110,7 +110,9 @@ account, and read back from it. That is the entire payload: the icons, labels an
 the repositories you subscribe to for news and the edition hour, and the position of every switch
 and dial in Settings. Never a token, and nothing gitchop fetched from GitHub — not the repository
 list, the pull requests, the news or the contributions. Firefox asks for your consent before this is
-switched on, and you can withdraw it in `about:addons`.
+switched on, and you can withdraw it in `about:addons`. While backup is off, the Backup page lists
+your gists once, to offer a backup gitchop made before; only the names of their files are looked at,
+and nothing is read from or written to any of them until you choose one.
 
 Nothing else is transmitted. gitchop does not read page content, does not track which pages you
 visit, and does not send your browsing anywhere. It runs on `github.com` only.
@@ -143,7 +145,7 @@ is unlisted, not private — anyone with the URL can read it, so keep the gist i
 | `storage` | Keeping your links and settings |
 | `alarms` | Refreshing the pull requests every few minutes, so the badge is right before the key is pressed, and making up the news edition once a day |
 | `https://github.com/*` | Running the menu on GitHub pages, and signing in (`github.com/login/device/code`, `github.com/login/oauth/access_token`) |
-| `https://api.github.com/*` | Repository search and listing, the pull requests, the news, the year's contributions, where gitchop's app is installed, and reading and writing your gist |
+| `https://api.github.com/*` | Repository search and listing, the pull requests, the news, the year's contributions, where gitchop's app is installed, listing your gists to find an earlier backup, and reading and writing your gist |
 
 There is no `tabs` permission, no `<all_urls>`, and no host beyond those two.
 
