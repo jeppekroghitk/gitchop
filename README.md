@@ -122,7 +122,8 @@ Settings and press **Build index** — gitchop then keeps its own list of the re
 can reach, and matches it locally. A search that names an owner goes out with the token that sees the
 most of that owner, and a bare word with the widest reach you have.
 
-Personal access tokens are under **Advanced** on the Sign-in page, and work beside a sign-in. Settings
+Personal access tokens have a page of their own, **Access tokens**, kept off the Settings rail until
+a token is saved; the Sign-in page points to it. Tokens work beside a sign-in. Settings
 recommends a fine-grained token and warns against a classic one: the `repo` scope a classic
 token needs grants write to every repository the account can reach, in every organisation, and
 gitchop only ever reads. The fine-grained recipe is three steps. Name the owner — the exact name of
