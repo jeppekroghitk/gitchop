@@ -140,6 +140,22 @@ function newestFirst(a, b) {
 }
 
 /**
+ * The oldest request first, so the top row is the one to look at next. Numbers from different
+ * repositories interleave as they come; that is accepted rather than worked around.
+ * @param {Pull} a
+ * @param {Pull} b
+ */
+function lowestFirst(a, b) {
+  return a.number - b.number || a.repo.localeCompare(b.repo);
+}
+
+/**
+ * How each lane is ordered: what waits on you by number, your own work by when it last moved.
+ * @type {Record<LaneId, (a: Pull, b: Pull) => number>}
+ */
+const ORDER = { reviewed: newestFirst, needsReview: lowestFirst, unreviewed: newestFirst };
+
+/**
  * What one token's answer becomes. `mine` splits on whether anyone has answered yet; `total` is
  * GitHub's own count for the review-request lane, and the fetched count for the other two — a
  * hundred open pull requests of your own is where that stops being exact, and where a lane count
@@ -149,7 +165,7 @@ function newestFirst(a, b) {
  */
 export function splitLanes(data) {
   /** @type {Pull[]} */
-  const needsReview = (data?.requested?.nodes ?? []).map(shapePull).filter(Boolean).sort(newestFirst);
+  const needsReview = (data?.requested?.nodes ?? []).map(shapePull).filter(Boolean).sort(ORDER.needsReview);
   /** @type {Pull[]} */
   const mine = (data?.mine?.nodes ?? []).map(shapePull).filter(Boolean).sort(newestFirst);
   const reviewed = mine.filter((pull) => pull.verdict);
@@ -186,7 +202,7 @@ export function mergeLanes(results) {
       }
       unseen += Math.max(0, (Number(part.total) || 0) - (part.pulls?.length ?? 0));
     }
-    pulls.sort(newestFirst);
+    pulls.sort(ORDER[lane.id]);
     merged[lane.id] = { pulls, total: pulls.length + unseen };
   }
   return merged;

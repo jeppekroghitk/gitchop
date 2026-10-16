@@ -83,7 +83,7 @@ export function createPulls(menu, pulls) {
   /**
    * What one pull request says about itself: the title — that is what you recognise your work
    * by — the repository, dim, with the owner dropped because you know which economics is yours,
-   * and how long since it last moved. On the feedback lane the glyph is the verdict; elsewhere it
+   * its number, and how long since it last moved. On the feedback lane the glyph is the verdict; elsewhere it
    * is the same mark on every row, meaning nothing — private or public is not a question here,
    * every one of these is yours to deal with. The column is for looking at.
    */
@@ -97,6 +97,7 @@ export function createPulls(menu, pulls) {
       verdict: lane.id === 'reviewed' ? pull.verdict : null,
       title: pull.title || `#${pull.number}`,
       repo: pull.repoShort || pull.repo,
+      number: pull.number ? `#${pull.number}` : '',
       age: pull.age || '',
     };
   }
@@ -127,10 +128,12 @@ export function createPulls(menu, pulls) {
     // No tail here: the highlight is the cursor, and the age then ends where the divider does.
     item.append(icon, title);
     const repo = entry.repo ? node('span', 'gc-pr-repo') : null;
+    const number = entry.number ? node('span', 'gc-pr-num') : null;
     const age = entry.age ? node('span', 'gc-pr-age') : null;
     if (repo) item.append(repo);
+    if (number) item.append(number);
     if (age) item.append(age);
-    const record = { li, item, icon, title, repo, age, entry };
+    const record = { li, item, icon, title, repo, number, age, entry };
     fillRow(record, entry);
 
     item.addEventListener('mousemove', () => {
@@ -163,6 +166,7 @@ export function createPulls(menu, pulls) {
     else delete record.icon.dataset.verdict;
     record.title.textContent = entry.title;
     if (record.repo) record.repo.textContent = entry.repo;
+    if (record.number) record.number.textContent = entry.number;
     if (record.age) record.age.textContent = entry.age;
   }
 

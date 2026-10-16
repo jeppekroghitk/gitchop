@@ -3,6 +3,13 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
+## Unreleased
+
+- Each pull request in the column shows its number after the repository, dim, as `#155`.
+- *Waiting on you* is ordered by number, lowest first, so the request that has waited longest is on
+  top rather than the one that last moved. Your own pull requests are still ordered by when they last
+  moved.
+
 ## 2.10.0
 
 - Turning backup on finds a backup gitchop made before: the Backup page looks through your gists for
