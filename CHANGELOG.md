@@ -3,7 +3,7 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
-## Unreleased
+## 2.11.0
 
 - Each pull request in the column shows its number after the repository, dim, as `#155`.
 - *Waiting on you* is ordered by number, lowest first, so the request that has waited longest is on
