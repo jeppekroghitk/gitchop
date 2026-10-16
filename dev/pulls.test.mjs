@@ -82,7 +82,7 @@ const lanes = splitLanes({
 });
 
 test('review requests come first; own pull requests split on whether anyone has answered', () => {
-  assert.deepEqual(lanes.needsReview.pulls.map((pull) => pull.number), [2, 1], 'newest first');
+  assert.deepEqual(lanes.needsReview.pulls.map((pull) => pull.number), [1, 2], 'lowest number first, whatever moved last');
   assert.equal(lanes.needsReview.total, 7, 'GitHub counted more than it sent');
   assert.deepEqual(lanes.reviewed.pulls.map((pull) => pull.number).sort(), [10, 12]);
   assert.deepEqual(lanes.unreviewed.pulls.map((pull) => pull.number), [11], 'a comment is not an answer');
@@ -100,6 +100,14 @@ test('merged across tokens, the same URL counts once and unseen remainders add u
     }),
   ]);
   assert.equal(merged.needsReview.pulls.length, 2, 'the duplicate from the second token is dropped');
+  assert.deepEqual(
+    mergeLanes([
+      splitLanes({ requested: { issueCount: 2, nodes: [node({ number: 30, url: 'https://github.com/a/b/pull/30' }), node({ number: 5, url: 'https://github.com/a/b/pull/5' })] } }),
+      splitLanes({ requested: { issueCount: 1, nodes: [node({ number: 12, url: 'https://github.com/c/d/pull/12', updatedAt: '2026-09-12T00:00:00Z' })] } }),
+    ]).needsReview.pulls.map((pull) => pull.number),
+    [5, 12, 30],
+    'what waits on you is ordered by number across tokens and repositories alike',
+  );
   assert.equal(merged.needsReview.total, 7, '2 seen + 5 the first token counted beyond what it sent');
   assert.equal(merged.reviewed.total, 2);
   assert.deepEqual(mergeLanes([]).unreviewed, { pulls: [], total: 0 });
