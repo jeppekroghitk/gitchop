@@ -6,6 +6,8 @@
  */
 export const CONFIG_KEY = 'sync';
 export const INDEX_KEY = 'index';
+/** How far a build of the index has come, while one runs. */
+export const INDEX_PROGRESS_KEY = 'indexProgress';
 export const PULLS_CACHE_KEY = 'pullsCache';
 export const RATE_KEY = 'rateCache';
 export const NEWS_CACHE_KEY = 'newsCache';

@@ -90,6 +90,20 @@ export async function signInAccess() {
 }
 
 /**
+ * Whether the overlay can turn the backup on without a prompt. Firefox asks for consent before the
+ * links leave the browser, and only an extension page can ask; Chrome has no such question.
+ * @returns {Promise<{ granted: boolean }>}
+ */
+export async function backupAccess() {
+  if (typeof api.runtime.getBrowserInfo !== 'function') return { granted: true };
+  try {
+    return { granted: await api.permissions.contains({ data_collection: ['bookmarksInfo'] }) };
+  } catch {
+    return { granted: false };
+  }
+}
+
+/**
  * Whoever updates from a version without the welcome is welcomed already: their next press stays
  * the menu they know. The sign-in row is left to show, the one new thing they see.
  * @param {string | undefined} previousVersion

@@ -94,7 +94,7 @@ test('no token means no pull request column and no snapshot', async () => {
 });
 
 test('an empty index and no budget before GitHub has answered', async () => {
-  assert.deepEqual(await send({ type: 'gitchop:index:state' }), { ok: true, count: 0, privateCount: 0, owners: [], failures: [], builtAt: null });
+  assert.deepEqual(await send({ type: 'gitchop:index:state' }), { ok: true, count: 0, privateCount: 0, owners: [], ownerCount: 0, failures: [], builtAt: null });
   assert.deepEqual(await send({ type: 'gitchop:rate' }), { ok: true, scopes: [] }, 'no answer from GitHub yet, so no budget to show');
 });
 

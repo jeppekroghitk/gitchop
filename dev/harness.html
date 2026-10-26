@@ -141,7 +141,7 @@
         const hasToken = sync.tokens.length > 0;
         return {
           ok: true,
-          tokens: sync.tokens.map(({ id, login, kind, scopes, owners, target, expiresAt }) => ({ id, login, kind, scopes, owners, target: target ?? null, expiresAt: expiresAt ?? null, broad: scopes.includes('repo') })),
+          tokens: sync.tokens.map(({ id, login, kind, scopes, owners, target, expiresAt, installations }) => ({ id, login, kind, scopes, owners, target: target ?? null, expiresAt: expiresAt ?? null, installations: installations ?? null, needsSignIn: false, broad: scopes.includes('repo') })),
           hasToken,
           connected: hasToken && Boolean(sync.gistId),
           gistId: sync.gistId,
@@ -157,6 +157,7 @@
         count: 212,
         privateCount: params.get('index') === 'public' ? 0 : 143,
         owners: [{ owner: 'itk-dev', count: 168 }, { owner: 'os2display', count: 31 }, { owner: 'jeppekrogh', count: 13 }],
+        ownerCount: 3,
         builtAt: at,
       });
       let index = params.get('index') === 'empty' || sync.tokens.length === 0 ? NO_INDEX : builtIndex('2026-09-16T08:02:11.000Z');
@@ -226,11 +227,37 @@
             return { ...syncState(), changed: true };
           case 'gitchop:index:state':
             return indexState();
-          case 'gitchop:index:build':
+          case 'gitchop:index:build': {
             if (sync.tokens.length === 0) return { ok: false, error: 'Add a token first.' };
-            await wait(1200);
-            index = builtIndex(now());
+            // A page of repositories at a time, reported the way the background writes its progress.
+            // ?index=fail ends in an error instead.
+            const full = builtIndex(now());
+            const pages = [0.3, 0.52, 0.68, 0.81, 0.9, 1];
+            for (const done of pages) {
+              await wait(450);
+              notify({ indexProgress: { newValue: { done, count: Math.round(full.count * done), privateCount: Math.round(full.privateCount * done) } } }, 'local');
+            }
+            if (params.get('index') === 'fail') return { ok: false, error: 'GitHub returned 502 listing repositories.' };
+            index = full;
             return indexState();
+          }
+          case 'gitchop:sync:find': {
+            // ?backups=none finds nothing, ?backups=many three, ?backups=fail cannot look.
+            await wait(700);
+            if (params.get('backups') === 'fail') return { ok: false, error: 'GitHub refused the request. The token needs gist read and write access.' };
+            const found = [
+              { id: 'b1a2c3d4e5f60718293a', url: 'https://gist.github.com/b1a2c3d4e5f60718293a', updatedAt: daysFromNow(-2) },
+              { id: '9f8e7d6c5b4a39281706', url: 'https://gist.github.com/9f8e7d6c5b4a39281706', updatedAt: daysFromNow(-41) },
+              { id: '0a1b2c3d4e5f60718293', url: 'https://gist.github.com/0a1b2c3d4e5f60718293', updatedAt: daysFromNow(-400) },
+            ];
+            const count = { none: 0, many: 3 }[params.get('backups')] ?? 1;
+            return { ok: true, found: found.slice(0, count) };
+          }
+          case 'gitchop:sync:access':
+            return { ok: true, granted: params.get('backupaccess') !== 'elsewhere' };
+          case 'gitchop:signin:installations':
+            await wait(400);
+            return syncState();
           case 'gitchop:index:clear':
             index = NO_INDEX;
             return indexState();
@@ -515,6 +542,7 @@
         notify({ rateCache: { newValue: { ...rateLeft } } }, 'local');
       }
       let welcomed = false;
+      let polls = 0;
       let consented = false;
       window.browser = window.chrome = {
         runtime: {
@@ -544,7 +572,13 @@
             // The device flow, never reaching GitHub: a code that stays pending until it runs out.
             if (message.type === 'gitchop:signin:pending') return { ok: true, code: null };
             if (message.type === 'gitchop:signin:start') return { ok: true, userCode: 'WDJB-MJHT', verificationUri: 'https://github.com/login/device', expiresAt: new Date(Date.now() + 900000).toISOString(), interval: 5 };
-            if (message.type === 'gitchop:signin:poll') return { ok: true, status: 'pending', interval: 5, error: null, state: null };
+            // ?signin=done: approved on GitHub by the second poll, with the app on the account and one organisation.
+            if (message.type === 'gitchop:signin:poll') {
+              polls += 1;
+              if (params.get('signin') !== 'done' || polls < 2) return { ok: true, status: 'pending', interval: 2, error: null, state: null };
+              sync.tokens.push({ id: 'app', secret: 'ghu_harness', login: 'jeppekrogh', kind: 'app', scopes: [], owners: ['jeppekrogh', 'itk-dev'], target: null, expiresAt: daysFromNow(1), installations: [{ id: 1, owner: 'jeppekrogh', type: 'User', selection: 'all' }, { id: 2, owner: 'itk-dev', type: 'Organization', selection: 'selected' }] });
+              return { ok: true, status: 'done', interval: 2, error: null, state: syncState() };
+            }
             if (message.type === 'gitchop:welcome:hint:dismiss') {
               store.hintDismissed = true;
               return { ok: true };

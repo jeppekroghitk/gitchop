@@ -55,6 +55,21 @@ export async function requestAccess() {
 }
 
 /**
+ * On Firefox, the consent to send the links and settings to the backup gist. Chrome has no such
+ * question and throws on the key, so it is let through. Like requestAccess, this must be the first
+ * thing a click awaits.
+ * @returns {Promise<boolean>}
+ */
+export async function requestBackupConsent() {
+  if (typeof api.runtime.getBrowserInfo !== 'function') return true;
+  try {
+    return await api.permissions.request({ data_collection: ['bookmarksInfo'] });
+  } catch {
+    return true;
+  }
+}
+
+/**
  * The flow after one poll's answer, and what that answer means.
  * @param {Flow} flow
  * @param {Answer<'gitchop:signin:poll'>} reply

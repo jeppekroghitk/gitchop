@@ -1,5 +1,5 @@
 import { api } from '../lib/links.js';
-import { requestAccess } from '../lib/signin-flow.js';
+import { requestAccess, requestBackupConsent } from '../lib/signin-flow.js';
 import { CONSENT_HASH } from '../lib/welcome.js';
 import { createWelcome } from './flow.js';
 
@@ -34,6 +34,7 @@ const welcome = createWelcome({
   variant: 'page',
   at: location.hash === CONSENT_HASH ? 'consent' : 'hello',
   access: async () => ((await requestAccess()) ? 'granted' : 'denied'),
+  backupAccess: async () => ((await requestBackupConsent()) ? 'granted' : 'denied'),
   returnToOpener,
 });
 document.body.append(welcome.element);
