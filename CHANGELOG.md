@@ -3,7 +3,7 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
-## Unreleased
+## 2.12.0
 
 - The welcome has two more steps after *Accounts*. *Backup* looks through your gists for a backup
   gitchop made before. It offers the one it finds, or lets you pick from several, with **Make a new
