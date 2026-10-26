@@ -209,9 +209,10 @@ export function ownersFromLinks(links) {
  * @param {number} [pages]
  * @param {number} [perPage]
  * @param {'all' | 'public' | 'private' | null} [visibility]
+ * @param {((batch: Repo[], page: number) => void) | null} [onPage] told of each page as it lands, for a build that shows its progress
  * @returns {Promise<Repo[]>}
  */
-export async function listAccessibleRepos(token, pages = 6, perPage = 100, visibility = null) {
+export async function listAccessibleRepos(token, pages = 6, perPage = 100, visibility = null, onPage = null) {
   /** @type {Repo[]} */
   const all = [];
   for (let page = 1; page <= pages; page += 1) {
@@ -227,10 +228,28 @@ export async function listAccessibleRepos(token, pages = 6, perPage = 100, visib
       break;
     }
     const batch = Array.isArray(result.body) ? result.body : [];
-    all.push(...batch.map((repo) => shape(repo, true)));
+    const shaped = batch.map((repo) => shape(repo, true));
+    all.push(...shaped);
+    onPage?.(shaped, page);
     if (batch.length < perPage) break;
   }
   return all;
+}
+
+/**
+ * How far a build of the index has come, from 0 to 1. Each token has an equal share. GitHub does
+ * not say how many pages a listing has, so each page landed fills half of what is left of the
+ * token's share, up to nine tenths of it; the rest is for what the build asks after the listing.
+ * The bar so moves on every page and never goes back.
+ * @param {number} token the token being listed, counted from 0
+ * @param {number} tokens how many there are
+ * @param {number} pages the pages of that token's listing landed so far
+ * @returns {number}
+ */
+export function buildProgress(token, tokens, pages) {
+  if (tokens <= 0) return 0;
+  const within = 0.9 * (1 - 0.5 ** Math.max(0, pages));
+  return Math.min(1, Math.max(0, (token + within) / tokens));
 }
 
 /**

@@ -507,6 +507,43 @@ test('an index build that started before a renewal does not roll the pair back',
   assert.deepEqual(appEntry().owners, ['me', 'itk-dev'], 'as did where the app is installed');
 });
 
+test('a build reports its progress as it goes, clears it at the end, and a second request joins it', async () => {
+  reset();
+  await seedApp({ access: 'ghu_build', pats: ['github_pat_org'] });
+  let release;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  const repo = (name, isPrivate) => ({ full_name: name, html_url: `https://github.com/${name}`, private: isPrivate });
+  route = (request) => {
+    if (request.path === '/user/repos' && request.auth === 'Bearer ghu_build') return json(200, [repo('me/one', true), repo('me/two', false)]);
+    if (request.path === '/user/repos' && request.auth === 'Bearer github_pat_org') return held.then(() => json(200, [repo('itk-dev/secret', true), repo('me/one', true)]));
+    return undefined;
+  };
+  const first = send({ type: 'gitchop:index:build' });
+  const second = send({ type: 'gitchop:index:build' });
+  await until(() => local.data.indexProgress?.count === 2, 'the first token’s page to be reported');
+  const progress = local.data.indexProgress;
+  assert.equal(progress.privateCount, 1);
+  assert.ok(progress.done >= 0.5 && progress.done < 1, `half the bar is the first of two tokens, not the end (${progress.done})`);
+  release();
+  const [one, two] = await Promise.all([first, second]);
+  assert.equal(one.count, 3, 'a repository two tokens list is counted once');
+  assert.deepEqual(two, one, 'the second request has the first one’s answer');
+  assert.equal(apiCalls().filter((call) => call.path === '/user/repos').length, 2, 'one listing per token, not one per request');
+  await until(() => !('indexProgress' in local.data), 'the progress to be cleared');
+});
+
+test('the bar moves on with every page and never past the token’s share', async () => {
+  const { buildProgress } = await import('../src/lib/repos.js');
+  assert.equal(buildProgress(0, 2, 0), 0);
+  assert.equal(buildProgress(0, 2, 1), 0.225);
+  assert.ok(buildProgress(0, 2, 2) > buildProgress(0, 2, 1));
+  assert.ok(buildProgress(0, 2, 6) < 0.5, 'six pages still leave room for what comes after the listing');
+  assert.equal(buildProgress(1, 2, 0), 0.5, 'the second token starts where the first one’s share ends');
+  assert.equal(buildProgress(0, 0, 3), 0, 'no tokens, no progress');
+});
+
 test('a change built from tokens loaded before a renewal keeps the renewed pair', async () => {
   reset();
   await seedApp({ access: 'ghu_stale', refresh: 'ghr_stale' });

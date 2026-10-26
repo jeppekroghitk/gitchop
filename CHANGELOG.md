@@ -3,6 +3,20 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
+## Unreleased
+
+- The welcome has two more steps after *Accounts*. *Backup* looks through your gists for a backup
+  gitchop made before. It offers the one it finds, or lets you pick from several, with **Make a new
+  one instead** beside it. With no earlier backup, **Make a backup** starts one. The step can be
+  skipped, and is passed by when a backup is on already. On Firefox, the overlay over GitHub cannot
+  ask for the consent the backup needs, so it points to Settings for that one step.
+- *Index* is the last step. It builds the search index while you watch: a bar on the chop's cut line
+  fills as each page of repositories arrives, and the count of repositories and private ones rolls
+  up beneath it. The end screen then shows how many repositories, private ones and accounts are in
+  search. If the build fails, the step offers **Try again** or going on without it.
+- A second request to build the index while one runs joins that build, instead of listing every
+  repository again beside it.
+
 ## 2.11.0
 
 - Each pull request in the column shows its number after the repository, dim, as `#155`.

@@ -1,9 +1,9 @@
 import { api } from '../lib/links.js';
 import { identify, tokenLabel } from '../lib/gist.js';
-import { listAccessibleRepos, privateOwnersOf } from '../lib/repos.js';
+import { buildProgress, listAccessibleRepos, privateOwnersOf } from '../lib/repos.js';
 import { listInstallations } from '../lib/signin.js';
 import { now } from './config.js';
-import { INDEX_KEY } from './keys.js';
+import { INDEX_KEY, INDEX_PROGRESS_KEY } from './keys.js';
 import { loadTokens, updateTokens } from './tokens.js';
 
 /** The local index of every repository the tokens can reach, which the menu searches on every settle. */
@@ -13,10 +13,32 @@ import { loadTokens, updateTokens } from './tokens.js';
  * @typedef {{ repos: import('../lib/repos.js').Repo[], builtAt: string | null, failures: string[] }} RepoIndex
  */
 
+/**
+ * A build on its way, as storage.local holds it while it runs: how far it has come, from 0 to 1,
+ * and how many repositories it has found so far. The welcome draws its bar from this.
+ * @typedef {{ done: number, count: number, privateCount: number }} IndexProgress
+ */
+
 /** @returns {Promise<RepoIndex>} */
 export async function readIndex() {
   const stored = await api.storage.local.get(INDEX_KEY);
   return stored[INDEX_KEY] ?? { repos: [], builtAt: null, failures: [] };
+}
+
+/**
+ * The build under way, if there is one. The welcome and Settings can both ask for a build, and a
+ * second request joins the first instead of listing everything again beside it.
+ * @type {Promise<IndexState> | null}
+ */
+let building = null;
+
+/** @returns {Promise<IndexState>} */
+export function buildIndex() {
+  building ??= runBuild().finally(() => {
+    building = null;
+    api.storage.local.remove(INDEX_PROGRESS_KEY).catch(() => {});
+  });
+  return building;
 }
 
 /**
@@ -28,8 +50,9 @@ export async function readIndex() {
  * What is learned is written back as a patch by id once the whole listing is done, which can be
  * minutes after the tokens were opened. It never carries a sign-in's expiry: a renewal in the
  * meantime has written a newer one.
+ * @returns {Promise<IndexState>}
  */
-export async function buildIndex() {
+async function runBuild() {
   const tokens = await loadTokens();
   if (tokens.length === 0) throw new Error('Sign in or add a token first.');
 
@@ -39,21 +62,20 @@ export async function buildIndex() {
   const failures = [];
   /** @type {Map<string, Partial<import('./config.js').TokenEntry>>} */
   const learned = new Map();
-  for (const entry of tokens) {
-    try {
-      const repos = await listAccessibleRepos(entry.secret);
-      if (entry.kind === 'app') {
-        const installations = await listInstallations(entry.secret).catch(() => null);
-        if (installations) learned.set(entry.id, { installations, owners: installations.map((install) => install.owner) });
-      } else {
-        /** @type {Partial<import('./config.js').TokenEntry>} */
-        const patch = { owners: privateOwnersOf(repos) };
-        // The expiry rides on every answer, so a token saved before it was read learns it here.
-        const who = await identify(entry.secret).catch(() => null);
-        if (who) patch.expiresAt = who.expiresAt ?? null;
-        learned.set(entry.id, patch);
-      }
-      for (const repo of repos) {
+  /** @param {number} done */
+  const report = (done) => {
+    let privateCount = 0;
+    for (const repo of seen.values()) if (repo.private) privateCount += 1;
+    /** @type {IndexProgress} */
+    const progress = { done, count: seen.size, privateCount };
+    api.storage.local.set({ [INDEX_PROGRESS_KEY]: progress }).catch(() => {});
+  };
+  report(0);
+
+  for (const [at, entry] of tokens.entries()) {
+    /** @type {(batch: import('../lib/repos.js').Repo[], page: number) => void} */
+    const onPage = (batch, page) => {
+      for (const repo of batch) {
         const key = repo.fullName.toLowerCase();
         if (seen.has(key)) continue;
         seen.set(key, {
@@ -65,9 +87,25 @@ export async function buildIndex() {
           owned: true,
         });
       }
+      report(buildProgress(at, tokens.length, page));
+    };
+    try {
+      const repos = await listAccessibleRepos(entry.secret, 6, 100, null, onPage);
+      if (entry.kind === 'app') {
+        const installations = await listInstallations(entry.secret).catch(() => null);
+        if (installations) learned.set(entry.id, { installations, owners: installations.map((install) => install.owner) });
+      } else {
+        /** @type {Partial<import('./config.js').TokenEntry>} */
+        const patch = { owners: privateOwnersOf(repos) };
+        // The expiry rides on every answer, so a token saved before it was read learns it here.
+        const who = await identify(entry.secret).catch(() => null);
+        if (who) patch.expiresAt = who.expiresAt ?? null;
+        learned.set(entry.id, patch);
+      }
     } catch (error) {
       failures.push(`${tokenLabel(entry)}: ${String(error.message ?? error)}`);
     }
+    report((at + 1) / tokens.length);
   }
 
   if (seen.size === 0 && failures.length > 0) throw new Error(failures.join(' · '));
@@ -84,6 +122,7 @@ export async function buildIndex() {
  *   count: number,
  *   privateCount: number,
  *   owners: { owner: string, count: number }[],
+ *   ownerCount: number,
  *   failures: string[],
  *   builtAt: string | null,
  * }} IndexState
@@ -106,6 +145,7 @@ export function indexState(index) {
     count: index.repos.length,
     privateCount: index.repos.filter((repo) => repo.private).length,
     owners: owners.slice(0, 12),
+    ownerCount: owners.length,
     failures: index.failures ?? [],
     builtAt: index.builtAt,
   };

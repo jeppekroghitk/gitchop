@@ -1,4 +1,5 @@
-import { loadLinks } from '../lib/links.js';
+import { INDEX_PROGRESS_KEY } from '../background/keys.js';
+import { api, loadLinks } from '../lib/links.js';
 import { openThroughBackground, send } from '../lib/messages.js';
 import { ownersFromLinks } from '../lib/repos.js';
 import { DEVICE_URL, INSTALL_URL } from '../lib/signin.js';
@@ -8,10 +9,12 @@ import { afterLostPoll, afterPoll, appEntry, countdown, ending, isOwnAccount, mi
 /** @import { SignInCode } from '../background/signin.js' */
 /** @import { SyncState, TokenView } from '../background/config.js' */
 /** @import { Flow } from '../lib/signin-flow.js' */
+/** @import { FoundStore } from '../lib/gist.js' */
+/** @import { IndexProgress, IndexState } from '../background/repo-index.js' */
 
 /**
  * The welcome, one decision per screen: what signing in unlocks, the code and the way to GitHub's
- * page, the wait, the organisations, and the end. It is drawn in two places from this one module,
+ * page, the wait, the organisations, the backup, and the index, which ends it. It is drawn in two places from this one module,
  * so the two cannot drift: the page of its own (src/welcome/welcome.html), which the toolbar
  * button and Settings open, and the "." overlay, where a new user meets it the first time they
  * press the key on GitHub. Each hands over an element to draw into and what is different about
@@ -25,7 +28,7 @@ import { afterLostPoll, afterPoll, appEntry, countdown, ending, isOwnAccount, mi
 
 const GITHUB = 'https://github.com/';
 
-/** @typedef {'hello' | 'consent' | 'signin' | 'access' | 'ready'} Screen */
+/** @typedef {'hello' | 'consent' | 'signin' | 'access' | 'backup' | 'index' | 'ready'} Screen */
 
 /**
  * What a place that shows the welcome says about itself.
@@ -42,10 +45,13 @@ const GITHUB = 'https://github.com/';
  *   carries on when the user is back.
  * - `returnToOpener`: the page, once the question is answered, going back to the GitHub tab that
  *   opened it; false when there is none to go back to.
+ * - `backupAccess`: asked inside the click that turns the backup on. Firefox wants consent before
+ *   the links leave the browser; `elsewhere` is the overlay, which cannot ask for it.
  * @typedef {{
  *   variant: 'page' | 'overlay',
  *   at?: 'hello' | 'signin' | 'consent',
  *   access: () => Promise<'granted' | 'denied' | 'elsewhere'>,
+ *   backupAccess?: () => Promise<'granted' | 'denied' | 'elsewhere'>,
  *   onMenu?: () => void,
  *   onEscape?: () => void,
  *   onElsewhere?: () => void,
@@ -172,8 +178,9 @@ const ENDED_LEDES = {
  * body, the overlay in its stage. `start` begins it; `destroy` stops its timers and listeners.
  * @param {WelcomeOptions} options
  */
-export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape, onElsewhere, returnToOpener }) {
+export function createWelcome({ variant, at = 'hello', access, backupAccess = async () => 'granted', onMenu, onEscape, onElsewhere, returnToOpener }) {
   const overlay = variant === 'overlay';
+  const reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /** @type {Screen} */
   let screen = 'hello';
@@ -215,6 +222,36 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
    * on a page of its own: the sign-in that follows it is the next step, not the same one again.
    */
   let asksFirst = at === 'consent';
+  /**
+   * Earlier backups in the account's gists: not asked yet, being asked, the answer, or why there
+   * is none. Asked once, when the backup step comes up.
+   * @type {null | 'asking' | { found: FoundStore[] } | { error: string }}
+   */
+  let backups = null;
+  /** @type {string | null} */
+  let chosenBackup = null;
+  let backupBusy = false;
+  /** @type {string | null} */
+  let backupError = null;
+  /** The overlay on Firefox, which cannot ask for the consent the backup needs. */
+  let backupElsewhere = false;
+  /** Turned on a moment ago: shown briefly before the index, like the sign-in. */
+  /** @type {'adopted' | 'created' | null} */
+  let backedUp = null;
+  /** Went past the backup without one, so that step is not marked done. */
+  let backupSkipped = false;
+  /** The build under way: how far it has come, as the background reports it. */
+  /** @type {IndexProgress | null} */
+  let progress = null;
+  /** @type {IndexState | null} */
+  let indexed = null;
+  /** @type {string | null} */
+  let indexError = null;
+  /** Went on after the build failed, so the end has no numbers to show. */
+  let indexSkipped = false;
+  /** The count as it shows: it rolls up to what the background reported, a frame at a time. */
+  let shownCount = 0;
+  let countFrame = 0;
 
   const root = el('div', 'gw');
   root.dataset.variant = variant;
@@ -257,28 +294,33 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
 
   /**
    * The few steps of the sign-in, as marks in the head: which one this is, of how many. None on the
-   * first screen, which is not a step, nor at the end of the way without a sign-in. Organisations
-   * passed by with "Skip for now" are marked skipped, not done.
-   * @param {'allow' | 'signin' | 'orgs' | 'ready' | null} step
+   * first screen, which is not a step, nor at the end of the way without a sign-in. A step passed
+   * by without doing it is marked skipped, not done. `finished` is the end: the last step done too.
+   * @param {'allow' | 'signin' | 'orgs' | 'backup' | 'index' | null} step
+   * @param {{ finished?: boolean }} [options]
    */
-  function paintSteps(step) {
+  function paintSteps(step, { finished = false } = {}) {
     stepsEl.textContent = '';
     stepsEl.hidden = step === null;
     if (step === null) return;
-    /** @type {['allow' | 'signin' | 'orgs' | 'ready', string][]} */
+    /** @type {['allow' | 'signin' | 'orgs' | 'backup' | 'index', string][]} */
     const all = [
       ['allow', 'Allow'],
       ['signin', 'Sign in'],
       ['orgs', 'Accounts'],
-      ['ready', 'Ready'],
+      ['backup', 'Backup'],
+      ['index', 'Index'],
     ];
     const steps = asksFirst ? all : all.slice(1);
     const here = steps.findIndex(([key]) => key === step);
-    stepsEl.setAttribute('aria-label', `Step ${here + 1} of ${steps.length}`);
+    stepsEl.setAttribute('aria-label', finished ? 'All steps done' : `Step ${here + 1} of ${steps.length}`);
+    /** @param {string} key */
+    const passed = (key) => (key === 'orgs' && orgsSkipped) || (key === 'backup' && backupSkipped) || (key === 'index' && indexSkipped);
     steps.forEach(([key, name], index) => {
       const item = el('li', 'gw-step', name);
-      item.dataset.state = index < here ? (key === 'orgs' && orgsSkipped ? 'skipped' : 'done') : index === here ? 'current' : 'todo';
-      if (index === here) item.setAttribute('aria-current', 'step');
+      const done = index < here || (finished && index === here);
+      item.dataset.state = done ? (passed(key) ? 'skipped' : 'done') : index === here ? 'current' : 'todo';
+      if (index === here && !finished) item.setAttribute('aria-current', 'step');
       stepsEl.append(item);
     });
   }
@@ -344,7 +386,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
    * @param {KeyboardEvent} event
    */
   function trapTab(event) {
-    const stops = /** @type {HTMLElement[]} */ ([...root.querySelectorAll('button, a[href]')]).filter(
+    const stops = /** @type {HTMLElement[]} */ ([...root.querySelectorAll('button, a[href], input')]).filter(
       (stop) =>
         stop.tabIndex >= 0 &&
         !(/** @type {HTMLButtonElement} */ (stop).disabled) &&
@@ -372,6 +414,8 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     if (screen === 'consent') return consentScreen();
     if (screen === 'signin') return signInScreen();
     if (screen === 'access') return accessScreen();
+    if (screen === 'backup') return backupScreen();
+    if (screen === 'index') return indexScreen();
     if (screen === 'ready') return readyScreen();
     return helloScreen();
   }
@@ -385,6 +429,9 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
       // The screen's own Later is the way past it; a second one down here would only compete.
       return [];
     }
+    if (screen === 'backup') return backupBusy || backedUp ? [] : [button('Skip the backup', skipBackup, { quiet: true })];
+    // While the index builds there is nothing to skip: it goes on in the background either way.
+    if (screen === 'index' && !indexed && !indexSkipped) return [];
     if (overlay) return [];
     // Put aside, the sign-in is still one click away, in the same words the menu's quiet row uses.
     const settings = button('Settings', openSettings, { quiet: true });
@@ -657,21 +704,224 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   }
 
   /**
+   * A gist's age in words a person uses — "3 days ago" — with the exact time kept for the title.
+   * @param {string | null} iso
+   */
+  function ago(iso) {
+    const at = Date.parse(iso ?? '');
+    if (Number.isNaN(at)) return 'at an unknown time';
+    const seconds = Math.round((at - Date.now()) / 1000);
+    const words = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+    /** @type {[Intl.RelativeTimeFormatUnit, number][]} */
+    const units = [
+      ['year', 365 * 24 * 3600],
+      ['month', 30 * 24 * 3600],
+      ['day', 24 * 3600],
+      ['hour', 3600],
+      ['minute', 60],
+    ];
+    for (const [unit, size] of units) {
+      if (Math.abs(seconds) >= size) return words.format(Math.round(seconds / size), unit);
+    }
+    return 'just now';
+  }
+
+  /**
+   * The backups found, newest first, as one choice. With only one there is nothing to choose, so
+   * it is a plain row; with more, each is a radio button, and the newest is picked to begin with.
+   * @param {FoundStore[]} found
+   */
+  function backupList(found) {
+    const pick = found.length > 1;
+    const list = el(pick ? 'div' : 'ul', 'gw-backups');
+    if (pick) {
+      list.setAttribute('role', 'radiogroup');
+      list.setAttribute('aria-label', 'Earlier backups');
+    }
+    found.forEach((store, index) => {
+      const row = el(pick ? 'label' : 'li', 'gw-backup');
+      if (pick) {
+        const radio = /** @type {HTMLInputElement} */ (el('input', 'gw-backup-radio'));
+        radio.type = 'radio';
+        radio.name = 'gw-backup';
+        radio.value = store.id;
+        radio.checked = store.id === chosenBackup;
+        radio.addEventListener('change', () => {
+          chosenBackup = store.id;
+        });
+        row.append(radio);
+      }
+      const name = el('span', 'gw-backup-name', `Changed ${ago(store.updatedAt)}`);
+      if (store.updatedAt) name.title = new Date(store.updatedAt).toLocaleString();
+      const detail = el('span', 'gw-backup-detail', index === 0 ? 'newest' : `gist ${store.id.slice(0, 7)}`);
+      row.append(name, detail, linkButton('View', store.url, { quiet: true }));
+      list.append(row);
+    });
+    return list;
+  }
+
+  /**
+   * The backup: links and settings kept in a secret gist, so another browser can pick them up.
+   * An earlier backup in the account's gists is offered first, since using it is what makes this
+   * browser match the last one. Otherwise a new one is one click.
+   */
+  function backupScreen() {
+    paintSteps('backup');
+    if (backedUp) {
+      // The step is ticked off while the screen still says so, as the sign-in's is.
+      paintSteps('index');
+      return [
+        el('p', 'gw-done-mark', '✓'),
+        el('h1', 'gw-title', backedUp === 'adopted' ? 'Backup restored' : 'Backup is on'),
+        el('p', 'gw-lede', backedUp === 'adopted' ? 'Your links and settings are back. Changes from now on go to the same gist.' : 'Your links and settings are in a secret gist now, and every change goes there too.'),
+      ];
+    }
+    const title = el('h1', 'gw-title', 'Back up your links and settings');
+    const why = el('p', 'gw-lede', 'gitchop can keep your links and settings in a secret gist on your GitHub account. Another browser where you sign in can then pick them up.');
+    const fine = el('p', 'gw-fine', 'A secret gist is unlisted, not private: anyone with its link can read it. It holds your links and settings, never a token.');
+
+    if (backupBusy) {
+      const status = el('p', 'gw-status');
+      status.append(el('span', 'gw-pulse'), el('span', 'gw-status-line', 'Setting up the backup…'));
+      return [title, why, status];
+    }
+    if (backupElsewhere) {
+      const settings = button('Open Settings', openSettings, { primary: true });
+      return [
+        el('h1', 'gw-title', 'Allow the backup in Settings'),
+        el('p', 'gw-lede', 'Your browser needs your permission before gitchop can send your links and settings to a gist, and only the Settings page can ask for it. Turn the backup on there, under Backup.'),
+        actions(settings, button('Continue', enterIndex)),
+      ];
+    }
+    const failed = backupError ? el('p', 'gw-notice', backupError) : null;
+    if (backups === null || backups === 'asking') {
+      const status = el('p', 'gw-status');
+      status.append(el('span', 'gw-pulse'), el('span', 'gw-status-line', 'Looking in your gists for an earlier gitchop backup…'));
+      return [title, why, status];
+    }
+    if ('error' in backups) {
+      const lead = el('p', 'gw-notice', 'gitchop could not look through your gists just now.');
+      lead.title = backups.error;
+      return [title, why, lead, actions(button('Try again', findBackups, { primary: true }), button('Make a new backup', () => connectBackup('')))];
+    }
+    const { found } = backups;
+    if (found.length === 0) {
+      const create = button('Make a backup', () => connectBackup(''), { primary: true });
+      return [title, why, ...(failed ? [failed] : []), actions(create), fine];
+    }
+    const use = button(found.length > 1 ? 'Use the chosen backup' : 'Use this backup', () => connectBackup(chosenBackup ?? found[0].id), { primary: true });
+    return [
+      el('h1', 'gw-title', found.length > 1 ? 'Found earlier backups' : 'Found an earlier backup'),
+      el('p', 'gw-lede', `There ${found.length > 1 ? 'are gitchop backups' : 'is a gitchop backup'} in your gists. Using one replaces the links and settings here with the ones it holds.`),
+      backupList(found),
+      ...(failed ? [failed] : []),
+      actions(use, button('Make a new one instead', () => connectBackup(''))),
+      fine,
+    ];
+  }
+
+  /**
+   * Repositories and private ones as two figures, and the accounts they are spread over.
+   * @param {{ count: number, privateCount: number, ownerCount?: number }} figures
+   */
+  function figures({ count, privateCount, ownerCount }) {
+    const row = el('dl', 'gw-figures');
+    /** @param {string} cls @param {number} value @param {string} name */
+    const figure = (cls, value, name) => {
+      const box = el('div', 'gw-figure');
+      box.append(el('dt', null, name), el('dd', cls, String(value)));
+      row.append(box);
+    };
+    figure('gw-index-count', count, count === 1 ? 'repository' : 'repositories');
+    figure('gw-index-private', privateCount, 'private');
+    if (ownerCount !== undefined) figure('gw-index-owners', ownerCount, ownerCount === 1 ? 'account' : 'accounts');
+    return row;
+  }
+
+  /**
+   * The last step: the index of every repository the sign-in reaches, which the menu's search
+   * reads on every key. A bar on the cut line fills as each page of repositories lands, with the
+   * count rolling up under it. When it is built, the screen is the end.
+   */
+  function indexScreen() {
+    if (indexed || indexSkipped) return readyParts();
+    paintSteps('index');
+    if (indexError) {
+      return [
+        el('h1', 'gw-title', 'The index did not build'),
+        el('p', 'gw-lede', indexError),
+        actions(button('Try again', buildIndex, { primary: true }), button('Continue without it', skipIndex)),
+        el('p', 'gw-fine', 'Search still works without it, more slowly and with fewer private repositories. Settings › Index can build it later.'),
+      ];
+    }
+    const now = progress ?? { done: 0, count: 0, privateCount: 0 };
+    const meter = el('div', 'gw-meter');
+    meter.setAttribute('role', 'progressbar');
+    meter.setAttribute('aria-label', 'Building the index');
+    meter.setAttribute('aria-valuemin', '0');
+    meter.setAttribute('aria-valuemax', '100');
+    meter.setAttribute('aria-valuenow', String(Math.round(now.done * 100)));
+    meter.style.setProperty('--gw-done', String(now.done));
+    meter.append(el('span', 'gw-meter-fill'));
+    const shown = figures({ count: shownCount, privateCount: now.privateCount });
+    return [
+      el('h1', 'gw-title', 'Building your search index'),
+      el('p', 'gw-lede', 'gitchop is listing every repository you can reach, so search finds them as you type.'),
+      shown,
+      meter,
+      el('p', 'gw-fine', 'With many organisations this takes a little while. It goes on by itself if you close this.'),
+    ];
+  }
+
+  /** Moves the bar and the figures on, in place, so the bar slides instead of being drawn again. */
+  function paintProgress() {
+    if (screen !== 'index' || !progress) return;
+    const meter = /** @type {HTMLElement | null} */ (screenEl.querySelector('.gw-meter'));
+    if (!meter) return;
+    meter.style.setProperty('--gw-done', String(progress.done));
+    meter.setAttribute('aria-valuenow', String(Math.round(progress.done * 100)));
+    const privates = screenEl.querySelector('.gw-index-private');
+    if (privates) privates.textContent = String(progress.privateCount);
+    rollCount();
+  }
+
+  /** The count rolls up to the last one reported, quickly at first and slower as it lands. */
+  function rollCount() {
+    cancelAnimationFrame(countFrame);
+    const step = () => {
+      const target = progress?.count ?? 0;
+      const gap = target - shownCount;
+      shownCount = reducedMotion || Math.abs(gap) <= 1 ? target : shownCount + Math.sign(gap) * Math.max(1, Math.round(Math.abs(gap) * 0.16));
+      const node = screenEl.querySelector('.gw-index-count');
+      if (node) node.textContent = String(shownCount);
+      if (shownCount !== target && !gone) countFrame = requestAnimationFrame(step);
+    };
+    countFrame = requestAnimationFrame(step);
+  }
+
+  /**
    * The end. On its own page it says where to press the key; over GitHub the menu is the next
    * thing, one Enter away.
    */
   function readyScreen() {
-    paintSteps(skipped ? null : 'ready');
+    paintSteps(null);
+    return readyParts();
+  }
+
+  /** The end's contents, after the index or without a sign-in, with the index's figures when there are any. */
+  function readyParts() {
+    if (!skipped) paintSteps('index', { finished: true });
+    const counted = indexed ? [figures(indexed)] : [];
     if (overlay) {
       const go = button('Open the menu', () => onMenu?.(), { primary: true });
       go.classList.add('gw-btn-big');
-      return [el('h1', 'gw-title', 'You’re ready'), el('p', 'gw-lede', readyLine()), actions(go)];
+      return [el('h1', 'gw-title', 'You’re ready'), ...counted, el('p', 'gw-lede', readyLine()), actions(go)];
     }
     const line = el('p', 'gw-lede');
     line.append('Press ', dot(), ' on any GitHub page for your links and repository search', skipped ? '.' : ', with your pull requests beside them.');
     const go = linkButton('Open GitHub', GITHUB, { primary: true, newTab: false });
     go.classList.add('gw-btn-big');
-    return [keycap(), el('h1', 'gw-title', 'You’re ready'), line, actions(go)];
+    return [keycap(), el('h1', 'gw-title', 'You’re ready'), ...counted, line, actions(go)];
   }
 
   /**
@@ -681,6 +931,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
    */
   function readyLine() {
     if (skipped) return 'Your links and repository search are one press away.';
+    if (indexed && indexed.privateCount === 0) return 'No private repositories came back yet. Install gitchop on an account to add its private repositories; Settings › Sign-in has the way.';
     if (!orgsSkipped) return 'Your private repositories are in search now.';
     const app = appEntry(sync);
     const installed = app ? ownerReach(sync, app, linkOwners).installs.length : 0;
@@ -912,8 +1163,142 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     const app = appEntry(sync);
     orgsSkipped = !(app && app.installations && reachedAll(app));
     // Not marked done: the sign-in itself keeps the welcome away, and only for as long as it works.
-    go('ready');
+    enterBackup();
   }
+
+  /** The backup step, unless a backup is on already; then straight on to the index. */
+  function enterBackup() {
+    if (sync?.connected) {
+      enterIndex();
+      return;
+    }
+    go('backup');
+    if (backups === null || (backups !== 'asking' && 'error' in backups)) findBackups();
+  }
+
+  async function findBackups() {
+    backups = 'asking';
+    backupError = null;
+    render();
+    try {
+      const { found } = await ask({ type: 'gitchop:sync:find' });
+      backups = { found };
+      chosenBackup = found[0]?.id ?? null;
+    } catch (error) {
+      backups = { error: String(error.message ?? error) };
+    }
+    if (!gone && screen === 'backup') render({ focus: true });
+  }
+
+  /**
+   * Turns the backup on: with a gist id, by using that backup; without one, by making a new one.
+   * The consent is the first thing awaited, since Firefox grants a prompt only inside the click.
+   * @param {string} gistId
+   */
+  async function connectBackup(gistId) {
+    if (backupBusy) return;
+    const verdict = await backupAccess();
+    if (gone) return;
+    if (verdict === 'elsewhere') {
+      backupElsewhere = true;
+      render({ focus: true });
+      return;
+    }
+    if (verdict === 'denied') {
+      backupError = 'Without your permission, gitchop cannot send your links and settings to a gist.';
+      render({ focus: true });
+      return;
+    }
+    backupBusy = true;
+    backupError = null;
+    render();
+    try {
+      sync = await ask({ type: 'gitchop:sync:connect', gistId });
+    } catch (error) {
+      backupBusy = false;
+      backupError = plainReason(String(error.message ?? error)) ?? null;
+      if (!gone) render({ focus: true });
+      return;
+    }
+    backupBusy = false;
+    backupSkipped = false;
+    backedUp = gistId ? 'adopted' : 'created';
+    announce(backedUp === 'adopted' ? 'Backup restored.' : 'Backup is on.');
+    render();
+    setTimeout(() => {
+      backedUp = null;
+      if (!gone && screen === 'backup') enterIndex();
+    }, 1400);
+  }
+
+  function skipBackup() {
+    backupSkipped = true;
+    enterIndex();
+  }
+
+  function enterIndex() {
+    backupElsewhere = false;
+    go('index');
+    buildIndex();
+  }
+
+  /**
+   * Builds the index and waits for it, while the background reports each page as it lands. The
+   * bar is let run to its end before the figures replace it, and stays up long enough to be seen
+   * even when the build is over at once.
+   */
+  async function buildIndex() {
+    if (progress) return;
+    const started = Date.now();
+    progress = { done: 0, count: 0, privateCount: 0 };
+    shownCount = 0;
+    indexed = null;
+    indexError = null;
+    indexSkipped = false;
+    announce('Building the index.');
+    render({ focus: true });
+    /** @type {IndexState} */
+    let result;
+    try {
+      result = await ask({ type: 'gitchop:index:build' });
+    } catch (error) {
+      progress = null;
+      indexError = plainReason(String(error.message ?? error)) ?? 'gitchop could not build the index.';
+      if (gone) return;
+      announce(indexError);
+      render({ focus: true });
+      return;
+    }
+    progress = { done: 1, count: result.count, privateCount: result.privateCount };
+    paintProgress();
+    await new Promise((resolve) => setTimeout(resolve, reducedMotion ? 0 : Math.max(700, 1800 - (Date.now() - started))));
+    if (gone) return;
+    progress = null;
+    indexed = result;
+    announce(`Index built: ${result.count} repositories, ${result.privateCount} of them private.`);
+    if (screen === 'index') render({ focus: true });
+  }
+
+  function skipIndex() {
+    indexError = null;
+    indexSkipped = true;
+    render({ focus: true });
+  }
+
+  /**
+   * The background writes how far a build has come to storage.local as it goes; the bar follows.
+   * A report never moves the bar back, whatever order the writes land in.
+   * @param {{ [key: string]: WebExt.StorageChange }} changes
+   * @param {string} area
+   */
+  const onStorage = (changes, area) => {
+    if (area !== 'local' || !(INDEX_PROGRESS_KEY in changes) || !progress || indexed) return;
+    /** @type {IndexProgress | undefined} */
+    const next = changes[INDEX_PROGRESS_KEY].newValue;
+    if (!next || progress.done >= 1) return;
+    progress = { done: Math.max(progress.done, next.done), count: Math.max(progress.count, next.count), privateCount: Math.max(progress.privateCount, next.privateCount) };
+    paintProgress();
+  };
 
   function openSettings() {
     ask({ type: 'gitchop:welcome:done' }).catch(() => {});
@@ -1023,6 +1408,7 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
   document.addEventListener('visibilitychange', onVisibility);
   window.addEventListener('pagehide', onPageHide);
   window.addEventListener('pageshow', onPageShow);
+  api.storage?.onChanged?.addListener(onStorage);
   (overlay ? root : window).addEventListener('keydown', /** @type {EventListener} */ (onKey));
 
   /**
@@ -1094,6 +1480,8 @@ export function createWelcome({ variant, at = 'hello', access, onMenu, onEscape,
     document.removeEventListener('visibilitychange', onVisibility);
     window.removeEventListener('pagehide', onPageHide);
     window.removeEventListener('pageshow', onPageShow);
+    api.storage?.onChanged?.removeListener?.(onStorage);
+    cancelAnimationFrame(countFrame);
     (overlay ? root : window).removeEventListener('keydown', /** @type {EventListener} */ (onKey));
   }
 

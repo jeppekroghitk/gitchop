@@ -304,6 +304,11 @@ function install() {
         const answer = await ask({ type: 'gitchop:signin:access' });
         return answer?.ok && !answer.granted ? 'elsewhere' : 'granted';
       },
+      // Firefox asks consent before the links go to a gist, and only an extension page can ask.
+      backupAccess: async () => {
+        const answer = await ask({ type: 'gitchop:sync:access' });
+        return answer?.ok && !answer.granted ? 'elsewhere' : 'granted';
+      },
       onMenu: () => menuAfterWelcome(welcome),
       onEscape: closeChop,
       onElsewhere: () => {
