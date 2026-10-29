@@ -211,6 +211,59 @@ const HANDLERS = {
   'gitchop:sync:push': async (message) => ({ ...(await push({ force: message.force })), ...(await state()) }),
 };
 
+/**
+ * The types a content script may send: the menu's, and the welcome's when it runs as the overlay on
+ * a GitHub page. Every other type — saving or removing a token, the backup's pull, push and stop,
+ * clearing the index, the settings writes — comes only from gitchop's own pages. A web page cannot
+ * message the background at all; this narrows what a content script could ask for should the tab
+ * it runs in ever be compromised.
+ * @type {ReadonlySet<string>}
+ */
+const CONTENT_TYPES = new Set(
+  /** @type {MessageType[]} */ ([
+    'gitchop:contributions',
+    'gitchop:contributions:refresh',
+    'gitchop:index:build',
+    'gitchop:install:landed',
+    'gitchop:install:open',
+    'gitchop:news',
+    'gitchop:news:refresh',
+    'gitchop:news:subscribe',
+    'gitchop:news:unsubscribe',
+    'gitchop:options',
+    'gitchop:panel',
+    'gitchop:pulls',
+    'gitchop:pulls:refresh',
+    'gitchop:rate',
+    'gitchop:repos',
+    'gitchop:repos:mine',
+    'gitchop:signin:access',
+    'gitchop:signin:cancel',
+    'gitchop:signin:device',
+    'gitchop:signin:installations',
+    'gitchop:signin:pending',
+    'gitchop:signin:poll',
+    'gitchop:signin:start',
+    'gitchop:sync:access',
+    'gitchop:sync:connect',
+    'gitchop:sync:find',
+    'gitchop:sync:state',
+    'gitchop:welcome',
+    'gitchop:welcome:done',
+    'gitchop:welcome:hint:dismiss',
+    'gitchop:welcome:open',
+  ]),
+);
+
+/**
+ * Whether a message came from one of gitchop's own pages, such as Settings or the welcome, rather
+ * than from a content script, whose sender URL is the GitHub page it runs in.
+ * @param {WebExt.MessageSender} sender
+ */
+function fromOwnPage(sender) {
+  return typeof sender?.url === 'string' && sender.url.startsWith(api.runtime.getURL(''));
+}
+
 /** @typedef {typeof HANDLERS} Handlers */
 
 /** @typedef {keyof Handlers} MessageType */
@@ -246,7 +299,8 @@ const HANDLERS = {
  * The runtime.onMessage listener. A message this does not know is left for someone else to answer;
  * one it does is answered asynchronously, which is what returning true tells the browser. Only
  * the table's own keys count: a type that merely names something every object inherits, such as
- * `constructor`, is not one of them.
+ * `constructor`, is not one of them. A type a content script may not send is refused unless it
+ * came from one of gitchop's own pages.
  * @param {unknown} message
  * @param {WebExt.MessageSender} sender
  * @param {(reply: Reply<MessageType>) => void} respond
@@ -255,6 +309,10 @@ const HANDLERS = {
 export function answer(message, sender, respond) {
   const type = /** @type {{ type?: unknown } | null | undefined} */ (message)?.type;
   if (typeof type !== 'string' || !Object.hasOwn(HANDLERS, type)) return false;
+  if (!CONTENT_TYPES.has(type) && !fromOwnPage(sender)) {
+    respond({ ok: false, error: 'Only gitchop’s own pages may ask for that.' });
+    return false;
+  }
   /** @type {(message: any, sender: WebExt.MessageSender) => object | Promise<object>} */
   const handler = HANDLERS[/** @type {MessageType} */ (type)];
   Promise.resolve(handler(message, sender))
