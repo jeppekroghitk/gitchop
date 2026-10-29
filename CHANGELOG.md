@@ -3,7 +3,7 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
-## Unreleased
+## 2.12.1
 
 - The background now checks who sends each message. The menu and the welcome overlay on GitHub
   pages may still ask for what they need. Saving or removing a token, the backup's pull, push and
