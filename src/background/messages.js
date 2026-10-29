@@ -12,7 +12,7 @@ import { pullsState, refreshPulls, schedulePulls } from './pulls.js';
 import { readPullsSettings } from './pulls-store.js';
 import { rateState } from './rate.js';
 import { buildIndex, indexState, readIndex } from './repo-index.js';
-import { cancelSignIn, installLanded, openDevicePage, openInstallPage, pendingSignIn, pollSignIn, refreshInstallations, startSignIn } from './signin.js';
+import { cancelSignIn, closeDevicePage, installLanded, openDevicePage, openInstallPage, pendingSignIn, pollSignIn, refreshInstallations, startSignIn } from './signin.js';
 import { connectGist, findBackups, pull, push, stopBackup } from './sync.js';
 import { addToken, loadTokens, removeToken } from './tokens.js';
 import { backupAccess, dismissMenuHint, markWelcomed, openWelcome, signInAccess, welcomeState } from './welcome.js';
@@ -174,6 +174,13 @@ const HANDLERS = {
    */
   'gitchop:signin:device': (_message, sender) => openDevicePage(sender?.tab?.id),
   /**
+   * The content script on GitHub's device page, when its count to the close runs out.
+   * @param {{}} _message
+   * @param {WebExt.MessageSender} [sender]
+   * @returns {Promise<{ closed: boolean }>}
+   */
+  'gitchop:signin:close': (_message, sender) => closeDevicePage(sender?.tab?.id),
+  /**
    * GitHub's page for installing the app, opened from the asking tab and closed once it lands;
    * `own` goes straight to the signed-in user's own account.
    * @param {{ own?: boolean }} message
@@ -239,6 +246,7 @@ const CONTENT_TYPES = new Set(
     'gitchop:repos:mine',
     'gitchop:signin:access',
     'gitchop:signin:cancel',
+    'gitchop:signin:close',
     'gitchop:signin:device',
     'gitchop:signin:installations',
     'gitchop:signin:pending',

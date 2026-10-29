@@ -4,7 +4,7 @@ import { INSTALL_URL, installUrlFor, listInstallations, pollToken, requestCode }
 import { seal } from '../lib/vault.js';
 import { forgetRenewal, noteAppSecret } from './app-token.js';
 import { ensureVaultKey, newId, readConfig, state, updateConfig } from './config.js';
-import { INSTALL_TAB_KEY } from './keys.js';
+import { DEVICE_TAB_KEY, INSTALL_TAB_KEY } from './keys.js';
 import { rememberScope } from './rate.js';
 import { SIGNIN_ALARM, clearSignIn, endSignIn, readSession, sessionGeneration, writeSession } from './signin-session.js';
 import { loadTokens, updateTokens } from './tokens.js';
@@ -200,15 +200,49 @@ export async function openDevicePage(openerTabId) {
   return { opened: true };
 }
 
+/** How long GitHub's device page says it will stay, once the sign-in is done, before it closes. */
+export const CLOSE_SECONDS = 5;
+
 /**
- * Back to where the sign-in started: that tab to the front, and GitHub's device page closed. Either
- * may be gone already — the user closed it, or never opened it through gitchop — which is fine.
+ * In memory where storage.session is switched off, for as long as the background lasts.
+ * @type {{ tabId: number, openerTabId?: number } | null}
+ */
+let deviceTabFallback = null;
+
+/**
+ * Back to where the sign-in started, once GitHub's device page has had its moment. The content
+ * script there is asked to count down first, so the tab does not vanish from under the user; it
+ * asks for the close when the count runs out. With no content script to answer — no access to
+ * github.com, or a page it does not run on — the tab closes at once. Either tab may be gone
+ * already — the user closed it, or never opened it through gitchop — which is fine.
  * @param {SignInSession} session
  */
 async function leaveDevicePage(session) {
   if (session.deviceTabId === undefined) return;
-  if (session.openerTabId !== undefined) await api.tabs.update(session.openerTabId, { active: true }).catch(() => {});
-  await api.tabs.remove(session.deviceTabId).catch(() => {});
+  const record = { tabId: session.deviceTabId, openerTabId: session.openerTabId };
+  // Remembered before the count starts, so its end always finds the tab to close.
+  if (api.storage.session) await api.storage.session.set({ [DEVICE_TAB_KEY]: record });
+  else deviceTabFallback = record;
+  const shown = await Promise.resolve()
+    .then(() => api.tabs.sendMessage(record.tabId, { type: 'gitchop:signin:closing', seconds: CLOSE_SECONDS }))
+    .catch(() => null);
+  if (!shown?.ok) await closeDevicePage(record.tabId);
+}
+
+/**
+ * The content script on GitHub's device page, at the end of its count. Only the tab gitchop opened
+ * for the sign-in is closed, and only once; the tab the user came from comes back to the front.
+ * @param {number | undefined} tabId
+ * @returns {Promise<{ closed: boolean }>}
+ */
+export async function closeDevicePage(tabId) {
+  const stored = api.storage.session ? (await api.storage.session.get(DEVICE_TAB_KEY))[DEVICE_TAB_KEY] : deviceTabFallback;
+  if (!stored || tabId === undefined || stored.tabId !== tabId) return { closed: false };
+  if (api.storage.session) await api.storage.session.remove(DEVICE_TAB_KEY);
+  else deviceTabFallback = null;
+  if (stored.openerTabId !== undefined) await api.tabs.update(stored.openerTabId, { active: true }).catch(() => {});
+  await api.tabs.remove(tabId).catch(() => {});
+  return { closed: true };
 }
 
 /** @returns {Promise<SignInPoll>} */

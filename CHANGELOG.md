@@ -3,6 +3,12 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
+## Unreleased
+
+- After you sign in, GitHub's page that says you are all set no longer closes without warning. A
+  notice on it counts down five seconds before gitchop closes the tab and brings you back to where
+  you started. **Keep open** stops the count.
+
 ## 2.12.1
 
 - The background now checks who sends each message. The menu and the welcome overlay on GitHub

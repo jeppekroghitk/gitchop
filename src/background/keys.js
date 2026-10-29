@@ -16,6 +16,8 @@ export const CONTRIB_CACHE_KEY = 'contributionsCache';
 export const SIGNIN_KEY = 'signin';
 /** In storage.session: the tab gitchop opened GitHub's install page in, and the tab it came from. */
 export const INSTALL_TAB_KEY = 'installTab';
+/** In storage.session: GitHub's device page, counting down to its close, and the tab it came from. */
+export const DEVICE_TAB_KEY = 'deviceTab';
 /** The welcome was finished, or put aside with Continue without signing in. */
 export const WELCOMED_KEY = 'welcomed';
 /** The menu's quiet sign-in row was waved away. */
