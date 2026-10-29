@@ -27,7 +27,7 @@ const badges = [];
 globalThis.chrome = {
   storage: { local: area(), sync: area(), onChanged: on('storage.onChanged') },
   alarms: { get: async () => undefined, create: async () => {}, clear: async () => {}, onAlarm: on('alarms.onAlarm') },
-  runtime: { onMessage: on('runtime.onMessage'), onInstalled: on('runtime.onInstalled'), onStartup: on('runtime.onStartup'), openOptionsPage: async () => {} },
+  runtime: { onMessage: on('runtime.onMessage'), onInstalled: on('runtime.onInstalled'), onStartup: on('runtime.onStartup'), openOptionsPage: async () => {}, getURL: (path) => `chrome-extension://gitchop/${path}` },
   action: { onClicked: on('action.onClicked'), setBadgeText: async (badge) => badges.push(badge), setTitle: async () => {} },
   permissions: { contains: async () => true, onAdded: on('permissions.onAdded'), onRemoved: on('permissions.onRemoved') },
 };
@@ -58,12 +58,33 @@ test('every listener is in place by the time the entry has been evaluated', () =
   );
 });
 
-function send(message) {
+// Settings, unless a test says otherwise; a content script's sender is the GitHub page it runs in.
+const OWN_PAGE = { url: 'chrome-extension://gitchop/src/options/options.html' };
+const GITHUB_PAGE = { url: 'https://github.com/jeppekroghitk/gitchop', tab: { id: 1 } };
+
+function send(message, sender = OWN_PAGE) {
   return new Promise((resolve) => {
-    const answered = listeners['runtime.onMessage'][0](message, {}, resolve);
-    if (!answered) resolve(undefined);
+    let replied = false;
+    const answered = listeners['runtime.onMessage'][0](message, sender, (reply) => {
+      replied = true;
+      resolve(reply);
+    });
+    if (!answered && !replied) resolve(undefined);
   });
 }
+
+test('a content script is refused what only gitchop’s own pages may ask', async () => {
+  const refused = { ok: false, error: 'Only gitchop’s own pages may ask for that.' };
+  assert.deepEqual(await send({ type: 'gitchop:token:save', token: 'ghp_x' }, GITHUB_PAGE), refused, 'no token saved from a GitHub page');
+  assert.deepEqual(await send({ type: 'gitchop:sync:push' }, GITHUB_PAGE), refused, 'no backup pushed from a GitHub page');
+  assert.deepEqual(await send({ type: 'gitchop:index:clear' }, {}), refused, 'a sender with no URL is no page of gitchop’s');
+  assert.equal(globalThis.chrome.storage.local.data.sync, undefined, 'and nothing was written');
+});
+
+test('a content script may ask what the menu and the overlay need', async () => {
+  assert.equal((await send({ type: 'gitchop:panel' }, GITHUB_PAGE)).ok, true);
+  assert.equal((await send({ type: 'gitchop:sync:state' }, GITHUB_PAGE)).ok, true);
+});
 
 test('a message nobody handles is left for someone else', async () => {
   assert.equal(await send({ type: 'gitchop:nothing' }), undefined, 'a message nobody handles is left for someone else');

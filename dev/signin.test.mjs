@@ -53,6 +53,7 @@ globalThis.chrome = {
     onStartup: on('runtime.onStartup'),
     openOptionsPage: async () => {},
     getManifest: () => ({ name: 'gitchop', version: '0.0.0' }),
+    getURL: (path) => `chrome-extension://gitchop/${path}`,
   },
   action: { onClicked: on('action.onClicked'), setBadgeText: async () => {}, setTitle: async () => {} },
   permissions: { contains: async () => hostAccess, onAdded: on('permissions.onAdded'), onRemoved: on('permissions.onRemoved') },
@@ -124,7 +125,8 @@ globalThis.fetch = async (input, init = {}) => {
 
 await import('../src/background/index.js');
 
-function send(message, sender = {}) {
+// Settings, unless a test says otherwise.
+function send(message, sender = { url: 'chrome-extension://gitchop/src/options/options.html' }) {
   return new Promise((resolve) => {
     const answered = listeners['runtime.onMessage'][0](message, sender, resolve);
     if (!answered) resolve(undefined);
