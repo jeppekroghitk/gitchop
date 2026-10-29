@@ -34,6 +34,8 @@ const area = (name) => {
 };
 const alarms = { created: [], cleared: [] };
 let hostAccess = true;
+/** Whether gitchop's content script is in the tab a message is sent to, to answer it. */
+let contentScript = false;
 globalThis.chrome = {
   storage: { local: area('local'), sync: area('sync'), session: area('session'), onChanged: on('storage.onChanged') },
   alarms: {
@@ -67,6 +69,11 @@ globalThis.chrome = {
     },
     remove: async (id) => {
       events.push({ type: 'tabs.remove', id });
+    },
+    sendMessage: async (id, message) => {
+      events.push({ type: 'tabs.sendMessage', id, message });
+      if (!contentScript) throw new Error('Could not establish connection. Receiving end does not exist.');
+      return { ok: true };
     },
   },
 };
@@ -150,6 +157,7 @@ function reset() {
   route = null;
   tokenAnswers = [];
   hostAccess = true;
+  contentScript = false;
   writeDelay = 0;
 }
 
@@ -809,7 +817,32 @@ test('a sign-in whose token does not expire is never dropped for its age, and a 
   assert.equal(appEntry().signInError, 'rejected');
 });
 
-test("GitHub's device page, opened for the code, is closed again once the sign-in is done", async () => {
+test("GitHub's device page counts down, and is closed when its count asks", async () => {
+  reset();
+  contentScript = true;
+  await send({ type: 'gitchop:signin:start' });
+  await send({ type: 'gitchop:signin:device' }, { tab: { id: 7 } });
+  intervalPassed();
+  tokenAnswers = [pair('one')];
+  assert.equal((await send({ type: 'gitchop:signin:poll' })).status, 'done');
+  const asked = events.find((event) => event.type === 'tabs.sendMessage');
+  assert.deepEqual(asked, { type: 'tabs.sendMessage', id: 42, message: { type: 'gitchop:signin:closing', seconds: 5 } }, 'the device page is asked to count down');
+  assert.ok(!events.some((event) => event.type === 'tabs.remove'), 'and is not closed yet');
+
+  assert.deepEqual(await send({ type: 'gitchop:signin:close' }, { url: 'https://github.com/login/device/success', tab: { id: 99 } }), { ok: true, closed: false }, 'a tab gitchop did not open is left alone');
+  assert.deepEqual(await send({ type: 'gitchop:signin:close' }, { url: 'https://github.com/login/device/success', tab: { id: 42 } }), { ok: true, closed: true });
+  assert.deepEqual(
+    events.filter((event) => event.type === 'tabs.update' || event.type === 'tabs.remove').map(({ type, id }) => [type, id]),
+    [
+      ['tabs.update', 7],
+      ['tabs.remove', 42],
+    ],
+    'back to the tab it started in, and the device page closed',
+  );
+  assert.deepEqual(await send({ type: 'gitchop:signin:close' }, { url: 'https://github.com/login/device/success', tab: { id: 42 } }), { ok: true, closed: false }, 'only once');
+});
+
+test("GitHub's device page, with no content script to count down, is closed at once", async () => {
   reset();
   await send({ type: 'gitchop:signin:start' });
   assert.deepEqual(await send({ type: 'gitchop:signin:device' }, { tab: { id: 7 } }), { ok: true, opened: true });

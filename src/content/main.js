@@ -6,6 +6,7 @@ import { onPress } from '../lib/welcome.js';
 import { createWelcome } from '../welcome/flow.js';
 import WELCOME_CSS from '../welcome/flow.css';
 import { createStage } from './chop.js';
+import { showClosing } from './closing.js';
 import { readContext } from './context.js';
 import { createMenu } from './menu.js';
 
@@ -137,6 +138,22 @@ function install() {
   // so no other page wakes the background; it closes the tab only if it opened it for the install.
   if (/^\/(?:organizations\/[^/]+\/)?settings\/installations\/\d+\/?$/.test(location.pathname)) {
     ask({ type: 'gitchop:install:landed' });
+  }
+  // GitHub's device page, opened by gitchop for a sign-in that is now done: the background asks
+  // for a count before it closes the tab, and the end of the count asks for the close.
+  try {
+    api.runtime.onMessage.addListener((message, _sender, respond) => {
+      if (message?.type !== 'gitchop:signin:closing') return false;
+      const seconds = Math.max(1, Math.round(Number(message.seconds) || 5));
+      showClosing(seconds, async () => {
+        const reply = await ask({ type: 'gitchop:signin:close' });
+        return Boolean(reply?.ok && reply.closed);
+      });
+      respond({ ok: true });
+      return false;
+    });
+  } catch {
+    /* without the listener, the background finds no answer and closes the tab at once */
   }
   try {
     api.storage.onChanged.addListener((changes, area) => {

@@ -107,6 +107,8 @@ declare namespace WebExt {
     /** Bringing a tab to the front needs no permission. */
     update(tabId: number, properties: { active?: boolean }): Promise<unknown>;
     remove(tabId: number): Promise<void>;
+    /** Messaging gitchop's own content script in a tab needs no permission either. */
+    sendMessage(tabId: number, message: unknown): Promise<any>;
   }
 
   interface Api {
