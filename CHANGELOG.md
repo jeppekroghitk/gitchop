@@ -3,7 +3,7 @@
 Reconstructed from the development history; this project has no git history before 2.0.0 to derive
 it from.
 
-## Unreleased
+## 2.13.0
 
 - After you sign in, GitHub's page that says you are all set no longer closes without warning. A
   notice on it counts down five seconds before gitchop closes the tab and brings you back to where
